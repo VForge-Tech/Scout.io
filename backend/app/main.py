@@ -3,12 +3,15 @@ from fastapi.middleware.cors import CORSMiddleware
 from pydantic import BaseModel
 from sqlalchemy.orm import Session
 
+from app.api.deps import require_admin, require_admin_or_member
+from app.api.v1.auth import router as auth_router
 from app.core.config import settings
 from app.core.db import engine, get_db
 from app.core.middleware import OrgIsolationMiddleware, RateLimitingMiddleware
-from app.core.security import get_current_org
+from app.core.security import get_current_org, get_current_user
 from app.models.base import Base
 from app.models.chatbot import Chatbot
+from app.models.user import User
 
 # Create tables (useful for sqlite fallback/in-memory tests)
 Base.metadata.create_all(bind=engine)
@@ -36,6 +39,9 @@ app.add_middleware(OrgIsolationMiddleware)
 # 2. Redis-backed rate limiting middleware
 app.add_middleware(RateLimitingMiddleware)
 
+# Include routers
+app.include_router(auth_router, prefix="/api/v1")
+
 
 # Pydantic schemas
 class ChatbotCreate(BaseModel):
@@ -47,7 +53,7 @@ class ChatbotResponse(BaseModel):
     id: int
     name: str
     description: str | None = None
-    org_id: str
+    org_id: int
     is_active: bool
 
     class Config:
@@ -77,7 +83,8 @@ async def healthz():
 def create_chatbot(
     chatbot_in: ChatbotCreate,
     db: Session = Depends(get_db),
-    org_id: str = Depends(get_current_org),
+    _: User = Depends(require_admin_or_member),
+    org_id: int = Depends(get_current_org),
 ):
     """Creates a chatbot. The org_id is extracted from the JWT token."""
     new_chatbot = Chatbot(
@@ -94,11 +101,10 @@ def create_chatbot(
 @app.get("/api/v1/chatbots", response_model=list[ChatbotResponse])
 def list_chatbots(
     db: Session = Depends(get_db),
-    org_id: str = Depends(get_current_org),
+    _: User = Depends(require_admin_or_member),
+    org_id: int = Depends(get_current_org),
 ):
     """Lists all chatbots. The query is automatically filtered to the current org_id."""
-    # Even though we write `.all()`, the before_compile listener rewrites
-    # this query to only select chatbots matching current_org_id_var
     chatbots = db.query(Chatbot).all()
     return chatbots
 
@@ -107,7 +113,8 @@ def list_chatbots(
 def get_chatbot(
     chatbot_id: int,
     db: Session = Depends(get_db),
-    org_id: str = Depends(get_current_org),
+    _: User = Depends(require_admin_or_member),
+    org_id: int = Depends(get_current_org),
 ):
     """Gets details of a chatbot. Automatically isolated to the current org_id."""
     chatbot = db.query(Chatbot).filter(Chatbot.id == chatbot_id).first()
@@ -123,9 +130,10 @@ def get_chatbot(
 def delete_chatbot(
     chatbot_id: int,
     db: Session = Depends(get_db),
-    org_id: str = Depends(get_current_org),
+    _: User = Depends(require_admin),
+    org_id: int = Depends(get_current_org),
 ):
-    """Deletes a chatbot. Automatically isolated to the current org_id."""
+    """Deletes a chatbot. Only admins can delete."""
     chatbot = db.query(Chatbot).filter(Chatbot.id == chatbot_id).first()
     if not chatbot:
         raise HTTPException(

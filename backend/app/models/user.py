@@ -3,12 +3,14 @@ from sqlalchemy import Boolean, Column, ForeignKey, Integer, String
 from app.models.base import Base
 
 
-class Chatbot(Base):
-    __tablename__ = "chatbots"
+class User(Base):
+    __tablename__ = "users"
 
     id = Column(Integer, primary_key=True, index=True)
-    name = Column(String, nullable=False, index=True)
-    description = Column(String, nullable=True)
+    email = Column(String, nullable=False, unique=True, index=True)
+    hashed_password = Column(String, nullable=False)
+    display_name = Column(String, nullable=True)
+    role = Column(String, nullable=False, default="member")
     org_id = Column(
         Integer,
         ForeignKey("organizations.id", ondelete="CASCADE"),

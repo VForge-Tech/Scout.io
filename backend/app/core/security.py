@@ -4,11 +4,14 @@ from datetime import datetime, timedelta
 import jwt
 from fastapi import Depends, HTTPException, status
 from fastapi.security import HTTPAuthorizationCredentials, HTTPBearer
+from sqlalchemy.orm import Session
 
 from app.core.config import settings
+from app.core.db import get_db
+from app.models.user import User
 
 # ContextVar to bind the authenticated organization ID to the request execution context
-current_org_id_var: contextvars.ContextVar[str | None] = contextvars.ContextVar(
+current_org_id_var: contextvars.ContextVar[int | None] = contextvars.ContextVar(
     "current_org_id", default=None
 )
 
@@ -54,7 +57,7 @@ def verify_token(token: str) -> dict:
 
 async def get_current_org(
     credentials: HTTPAuthorizationCredentials = Depends(security_scheme),
-) -> str:
+) -> int:
     """FastAPI dependency to extract and validate the org_id from JWT."""
     token = credentials.credentials
     payload = verify_token(token)
@@ -67,6 +70,33 @@ async def get_current_org(
             headers={"WWW-Authenticate": "Bearer"},
         )
 
-    # Set the ContextVar for database isolation
     current_org_id_var.set(org_id)
     return org_id
+
+
+async def get_current_user(
+    credentials: HTTPAuthorizationCredentials = Depends(security_scheme),
+    db: Session = Depends(get_db),
+) -> User:
+    """FastAPI dependency to extract the authenticated User from the DB."""
+    token = credentials.credentials
+    payload = verify_token(token)
+
+    user_id = payload.get("sub")
+    if not user_id:
+        raise HTTPException(
+            status_code=status.HTTP_401_UNAUTHORIZED,
+            detail="Token does not contain user identifier",
+            headers={"WWW-Authenticate": "Bearer"},
+        )
+
+    user = db.query(User).filter(User.id == int(user_id)).first()
+    if not user or not user.is_active:
+        raise HTTPException(
+            status_code=status.HTTP_401_UNAUTHORIZED,
+            detail="User not found or inactive",
+            headers={"WWW-Authenticate": "Bearer"},
+        )
+
+    current_org_id_var.set(user.org_id)
+    return user
