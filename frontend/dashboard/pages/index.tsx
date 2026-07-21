@@ -9,7 +9,7 @@ export default function Home() {
       <Head>
         <title>Scout.io | Dashboard</title>
         <meta name="viewport" content="width=device-width, initial-scale=1" />
-        <link href="https://fonts.googleapis.com/css2?family=Outfit:wght@300;400;600;800&family=Plus+Jakarta+Sans:wght@300;400;500;700&display=swap" rel="stylesheet" />
+
       </Head>
 
       <div className="app-container">
@@ -135,7 +135,10 @@ export default function Home() {
               {/* Chatbots Section */}
               <div className="section-header">
                 <h3>Active Chatbots</h3>
-                <button className="btn btn-primary" onClick={() => setActiveTab("chatbots")}>
+                <button
+                  className="btn btn-primary"
+                  onClick={() => setActiveTab("chatbots")}
+                >
                   + Create Chatbot
                 </button>
               </div>
@@ -145,7 +148,10 @@ export default function Home() {
                   <div className="chatbot-status active"></div>
                   <div className="chatbot-info">
                     <h4>Customer Support Agent</h4>
-                    <p>Handles FAQS, billing, and returns. Integrated with website widget.</p>
+                    <p>
+                      Handles FAQS, billing, and returns. Integrated with
+                      website widget.
+                    </p>
                   </div>
                   <div className="chatbot-meta">
                     <span className="meta-tag">GPT-4 Fallback</span>
@@ -156,7 +162,10 @@ export default function Home() {
                   <div className="chatbot-status active"></div>
                   <div className="chatbot-info">
                     <h4>Internal Tech Support</h4>
-                    <p>Handles onboarding, IT service requests, and hardware issues.</p>
+                    <p>
+                      Handles onboarding, IT service requests, and hardware
+                      issues.
+                    </p>
                   </div>
                   <div className="chatbot-meta">
                     <span className="meta-tag">Gemma 2 Open</span>
@@ -171,8 +180,14 @@ export default function Home() {
             <div className="placeholder-pane fade-in">
               <div className="placeholder-icon">🛠️</div>
               <h3>Tab: {activeTab.toUpperCase()}</h3>
-              <p>Detailed module component implementation is in progress. The infrastructure is fully ready.</p>
-              <button className="btn btn-secondary" onClick={() => setActiveTab("overview")}>
+              <p>
+                Detailed module component implementation is in progress. The
+                infrastructure is fully ready.
+              </p>
+              <button
+                className="btn btn-secondary"
+                onClick={() => setActiveTab("overview")}
+              >
                 Return to Overview
               </button>
             </div>
@@ -190,8 +205,8 @@ export default function Home() {
           --accent-blue: #3a86ff;
           --text-primary: #f8f9fa;
           --text-secondary: #adb5bd;
-          --font-family: 'Plus Jakarta Sans', sans-serif;
-          --font-display: 'Outfit', sans-serif;
+          --font-family: "Plus Jakarta Sans", sans-serif;
+          --font-display: "Outfit", sans-serif;
         }
 
         * {
@@ -205,9 +220,17 @@ export default function Home() {
           color: var(--text-primary);
           font-family: var(--font-family);
           overflow-x: hidden;
-          background-image: 
-            radial-gradient(circle at 10% 20%, rgba(157, 78, 221, 0.08) 0%, transparent 40%),
-            radial-gradient(circle at 90% 80%, rgba(58, 134, 255, 0.08) 0%, transparent 45%);
+          background-image:
+            radial-gradient(
+              circle at 10% 20%,
+              rgba(157, 78, 221, 0.08) 0%,
+              transparent 40%
+            ),
+            radial-gradient(
+              circle at 90% 80%,
+              rgba(58, 134, 255, 0.08) 0%,
+              transparent 45%
+            );
           background-attachment: fixed;
         }
 
@@ -238,7 +261,11 @@ export default function Home() {
           width: 32px;
           height: 32px;
           border-radius: 8px;
-          background: linear-gradient(135deg, var(--accent-purple), var(--accent-blue));
+          background: linear-gradient(
+            135deg,
+            var(--accent-purple),
+            var(--accent-blue)
+          );
           box-shadow: 0 0 15px rgba(157, 78, 221, 0.4);
         }
 
@@ -386,7 +413,9 @@ export default function Home() {
           border-radius: 12px;
           padding: 24px;
           backdrop-filter: blur(10px);
-          transition: transform 0.3s ease, border-color 0.3s ease;
+          transition:
+            transform 0.3s ease,
+            border-color 0.3s ease;
         }
 
         .metric-card:hover {
@@ -524,7 +553,11 @@ export default function Home() {
         }
 
         .btn-primary {
-          background: linear-gradient(135deg, var(--accent-purple), var(--accent-blue));
+          background: linear-gradient(
+            135deg,
+            var(--accent-purple),
+            var(--accent-blue)
+          );
           color: #fff;
           box-shadow: 0 4px 15px rgba(157, 78, 221, 0.3);
         }
