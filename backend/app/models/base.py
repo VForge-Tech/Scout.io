@@ -1,5 +1,7 @@
+from typing import Optional
+
 from sqlalchemy import Delete, Select, Update, event
-from sqlalchemy.orm import Session, declarative_base
+from sqlalchemy.orm import ORMExecuteState, Session, declarative_base
 
 from app.core.security import current_org_id_var
 
@@ -7,7 +9,7 @@ Base = declarative_base()
 
 
 @event.listens_for(Session, "do_orm_execute")
-def receive_do_orm_execute(orm_execute_state):
+def receive_do_orm_execute(orm_execute_state: ORMExecuteState) -> None:
     """Intercepts ORM statement executions to append org_id filtering on multi-tenant models."""
     org_id = current_org_id_var.get()
     if org_id is not None and not orm_execute_state.is_column_load:

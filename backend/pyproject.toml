@@ -22,7 +22,11 @@ dev = [
     "httpx>=0.24.0",
     "ruff>=0.1.0",
     "safety>=2.3.0",
+    "sqlalchemy2-stubs>=1.4.0",
 ]
+
+[tool.mypy]
+plugins = "sqlalchemy.ext.mypy.plugin"
 
 [tool.ruff]
 line-length = 88
