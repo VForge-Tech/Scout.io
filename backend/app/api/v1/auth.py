@@ -82,16 +82,16 @@ def refresh(body: RefreshRequest):
             settings.JWT_SECRET_KEY,
             algorithms=[settings.JWT_ALGORITHM],
         )
-    except jwt.ExpiredSignatureError:
+    except jwt.ExpiredSignatureError as exc:
         raise HTTPException(
             status_code=status.HTTP_401_UNAUTHORIZED,
             detail="Refresh token has expired",
-        )
-    except jwt.InvalidTokenError:
+        ) from exc
+    except jwt.InvalidTokenError as exc:
         raise HTTPException(
             status_code=status.HTTP_401_UNAUTHORIZED,
             detail="Invalid refresh token",
-        )
+        ) from exc
 
     if payload.get("type") != "refresh":
         raise HTTPException(
@@ -133,11 +133,11 @@ def logout(body: LogoutRequest):
             settings.JWT_SECRET_KEY,
             algorithms=[settings.JWT_ALGORITHM],
         )
-    except Exception:
+    except Exception as exc:
         raise HTTPException(
             status_code=status.HTTP_401_UNAUTHORIZED,
             detail="Invalid refresh token",
-        )
+        ) from exc
 
     if payload.get("type") != "refresh":
         raise HTTPException(
