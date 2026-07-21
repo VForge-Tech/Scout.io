@@ -1,8 +1,9 @@
-from fastapi.testclient import TestClient
 import pytest
-from app.main import app
-from app.core.security import create_access_token
+from fastapi.testclient import TestClient
+
 from app.core.db import SessionLocal
+from app.core.security import create_access_token
+from app.main import app
 from app.models.chatbot import Chatbot
 
 client = TestClient(app)
@@ -11,8 +12,9 @@ client = TestClient(app)
 @pytest.fixture(autouse=True)
 def clean_database():
     """Fixture to clear data before each test."""
-    from app.models.base import Base
     from app.core.db import engine
+    from app.models.base import Base
+
     Base.metadata.create_all(bind=engine)
 
     db = SessionLocal()
@@ -107,13 +109,9 @@ def test_organization_isolation_flow():
     assert bots_b[0]["org_id"] == "org_B"
 
     # 6. Try to fetch Bot B using Org A's credentials (should fail with 404)
-    get_bot_b_via_a = client.get(
-        f"/api/v1/chatbots/{bot_b_id}", headers=headers_a
-    )
+    get_bot_b_via_a = client.get(f"/api/v1/chatbots/{bot_b_id}", headers=headers_a)
     assert get_bot_b_via_a.status_code == 404
 
     # 7. Try to delete Bot A using Org B's credentials (should fail with 404)
-    del_bot_a_via_b = client.delete(
-        f"/api/v1/chatbots/{bot_a_id}", headers=headers_b
-    )
+    del_bot_a_via_b = client.delete(f"/api/v1/chatbots/{bot_a_id}", headers=headers_b)
     assert del_bot_a_via_b.status_code == 404

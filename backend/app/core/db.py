@@ -1,7 +1,9 @@
 import sys
+
 from sqlalchemy import create_engine
-from sqlalchemy.orm import sessionmaker
 from sqlalchemy.exc import OperationalError
+from sqlalchemy.orm import sessionmaker
+
 from app.core.config import settings
 
 # Check if we are running unit tests

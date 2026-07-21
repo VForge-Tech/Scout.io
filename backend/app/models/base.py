@@ -1,5 +1,6 @@
-from sqlalchemy.orm import declarative_base, Session
-from sqlalchemy import event, Select, Update, Delete
+from sqlalchemy import Delete, Select, Update, event
+from sqlalchemy.orm import Session, declarative_base
+
 from app.core.security import current_org_id_var
 
 Base = declarative_base()

@@ -1,13 +1,12 @@
-from fastapi import FastAPI, Depends, HTTPException, status
+from fastapi import Depends, FastAPI, HTTPException, status
 from fastapi.middleware.cors import CORSMiddleware
-from sqlalchemy.orm import Session
-from typing import List
 from pydantic import BaseModel
+from sqlalchemy.orm import Session
 
 from app.core.config import settings
-from app.core.db import get_db, engine
+from app.core.db import engine, get_db
+from app.core.middleware import OrgIsolationMiddleware, RateLimitingMiddleware
 from app.core.security import get_current_org
-from app.core.middleware import RateLimitingMiddleware, OrgIsolationMiddleware
 from app.models.base import Base
 from app.models.chatbot import Chatbot
 
@@ -92,7 +91,7 @@ def create_chatbot(
     return new_chatbot
 
 
-@app.get("/api/v1/chatbots", response_model=List[ChatbotResponse])
+@app.get("/api/v1/chatbots", response_model=list[ChatbotResponse])
 def list_chatbots(
     db: Session = Depends(get_db),
     org_id: str = Depends(get_current_org),

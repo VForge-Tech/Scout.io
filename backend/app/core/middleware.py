@@ -1,9 +1,10 @@
 import logging
 import time
+
+import redis
 from fastapi import Request, Response, status
 from fastapi.responses import JSONResponse
 from starlette.middleware.base import BaseHTTPMiddleware, RequestResponseEndpoint
-import redis
 
 from app.core.config import settings
 from app.core.security import current_org_id_var, verify_token
