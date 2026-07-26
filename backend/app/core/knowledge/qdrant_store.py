@@ -90,13 +90,16 @@ class QdrantStore:
 
         filter_query = qdrant_models.Filter(must=must_filters) if must_filters else None
 
-        search_result = self.client.search(
-            collection_name=self.collection_name,
-            query_vector=query_vector,
-            limit=top_k,
-            query_filter=filter_query,
-            score_threshold=score_threshold,
-        )
+        try:
+            search_result = self.client.search(
+                collection_name=self.collection_name,
+                query_vector=query_vector,
+                limit=top_k,
+                query_filter=filter_query,
+                score_threshold=score_threshold,
+            )
+        except Exception:
+            return self._keyword_search(query, top_k, organization_id, chatbot_id)
 
         return [
             {
@@ -108,6 +111,51 @@ class QdrantStore:
                 "metadata": {k: v for k, v in hit.payload.items() if k != "text"},
             }
             for hit in search_result
+        ]
+
+    def _keyword_search(
+        self,
+        query: str,
+        top_k: int = 5,
+        organization_id: str | None = None,
+        chatbot_id: str | None = None,
+    ) -> list[dict]:
+        keywords = query.lower().split()
+        try:
+            scroll_result = self.client.scroll(
+                collection_name=self.collection_name,
+                limit=100,
+            )
+        except Exception:
+            return []
+
+        points = scroll_result[0]
+        scored = []
+
+        for point in points:
+            text = (point.payload.get("text", "") or "").lower()
+            if organization_id and point.payload.get("organization_id") != organization_id:
+                continue
+            if chatbot_id and point.payload.get("chatbot_id") != chatbot_id:
+                continue
+
+            score = sum(1 for kw in keywords if kw in text) / max(len(keywords), 1)
+            if score > 0:
+                scored.append((score, point))
+
+        scored.sort(key=lambda x: -x[0])
+        scored = scored[:top_k]
+
+        return [
+            {
+                "id": str(point.id),
+                "score": score,
+                "text": point.payload.get("text", ""),
+                "source_id": point.payload.get("source_id", ""),
+                "chunk_index": point.payload.get("chunk_index", 0),
+                "metadata": {k: v for k, v in point.payload.items() if k != "text"},
+            }
+            for score, point in scored
         ]
 
     def delete_source_chunks(self, source_id: str):

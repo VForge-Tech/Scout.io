@@ -42,6 +42,11 @@ class Settings(BaseSettings):
     celery_broker_url: str = "redis://localhost:6379/1"
     celery_result_backend: str = "redis://localhost:6379/1"
 
+    cors_origins: list[str] = ["http://localhost:3000", "http://localhost:8000"]
+
+    rate_limit_per_ip: str = "100/minute"
+    rate_limit_per_org: str = "1000/minute"
+
     model_config = {"env_file": ".env", "extra": "allow"}
 
 

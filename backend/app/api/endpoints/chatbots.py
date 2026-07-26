@@ -1,11 +1,12 @@
 from uuid import UUID
 
-from fastapi import APIRouter, Depends, HTTPException, status
+from fastapi import APIRouter, Depends, HTTPException, Request, status
 from sqlalchemy.orm import Session
 
 from app.api.deps import get_current_user, get_db
 from app.models import Chatbot, User
 from app.schemas.chatbot import ChatbotCreate, ChatbotRead, ChatbotUpdate
+from app.utils.audit import create_audit_log
 
 router = APIRouter(prefix="/chatbots", tags=["chatbots"])
 
@@ -42,6 +43,7 @@ def list_chatbots(
 @router.post("", response_model=ChatbotRead, status_code=status.HTTP_201_CREATED)
 def create_chatbot(
     payload: ChatbotCreate,
+    request: Request,
     db: Session = Depends(get_db),
     user: User = Depends(get_current_user),
 ):
@@ -55,6 +57,12 @@ def create_chatbot(
     db.add(chatbot)
     db.commit()
     db.refresh(chatbot)
+    create_audit_log(
+        db, action="chatbot.created", user_id=user.id,
+        organization_id=user.organization_id,
+        details={"chatbot_id": str(chatbot.id), "name": chatbot.name},
+        ip_address=request.client.host if request.client else None,
+    )
     return chatbot
 
 
@@ -86,10 +94,17 @@ def update_chatbot(
 @router.delete("/{chatbot_id}", status_code=status.HTTP_204_NO_CONTENT)
 def delete_chatbot(
     chatbot_id: UUID,
+    request: Request,
     db: Session = Depends(get_db),
     user: User = Depends(get_current_user),
 ):
     chatbot = _get_chatbot(db, chatbot_id, user)
     db.delete(chatbot)
     db.commit()
+    create_audit_log(
+        db, action="chatbot.deleted", user_id=user.id,
+        organization_id=user.organization_id,
+        details={"chatbot_id": str(chatbot_id)},
+        ip_address=request.client.host if request.client else None,
+    )
     return None

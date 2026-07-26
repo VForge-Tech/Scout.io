@@ -3,6 +3,7 @@ from fastapi import APIRouter
 from app.api.endpoints import (
     admin,
     analytics,
+    analytics_v2,
     auth,
     chatbots,
     developer,
@@ -11,6 +12,7 @@ from app.api.endpoints import (
     policies,
     retrieval,
     sessions,
+    webhooks,
     widget_api,
     widgets,
 )
@@ -23,8 +25,10 @@ api_router.include_router(chatbots.router)
 api_router.include_router(policies.router)
 api_router.include_router(knowledge_sources.router)
 api_router.include_router(analytics.router)
+api_router.include_router(analytics_v2.router)
 api_router.include_router(sessions.router)
 api_router.include_router(widgets.router)
+api_router.include_router(webhooks.router)
 api_router.include_router(developer.router)
 api_router.include_router(widget_api.router)
 api_router.include_router(retrieval.router)

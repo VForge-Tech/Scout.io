@@ -125,6 +125,42 @@ def get_platform_stats(
     }
 
 
+@router.get("/system-config", response_model=list[dict])
+def list_system_config(
+    db: Session = Depends(get_db),
+    admin: User = Depends(require_admin),
+):
+    from app.models import SystemConfig
+    configs = db.query(SystemConfig).all()
+    return [{"id": str(c.id), "key": c.key, "value": c.value, "description": c.description} for c in configs]
+
+
+@router.put("/system-config/{key}")
+def update_system_config(
+    key: str,
+    payload: dict,
+    request: Request,
+    db: Session = Depends(get_db),
+    admin: User = Depends(require_admin),
+):
+    from app.models import SystemConfig
+    config = db.query(SystemConfig).filter(SystemConfig.key == key).first()
+    if not config:
+        config = SystemConfig(key=key, value=payload)
+        db.add(config)
+    else:
+        config.value = payload
+    db.commit()
+
+    create_audit_log(
+        db, action="system_config.updated", user_id=admin.id,
+        details={"key": key, "value": payload},
+        ip_address=request.client.host if request.client else None,
+    )
+
+    return {"key": key, "value": payload}
+
+
 @router.get("/audit-logs", response_model=list[AuditLogRead])
 def list_audit_logs(
     limit: int = 50,
