@@ -1,7 +1,0 @@
-# Dev and Test dependencies
-pytest>=7.0.0
-httpx>=0.24.0
-ruff>=0.1.0
-safety>=2.3.0
-# Pin sqlalchemy2-stubs to an available release to avoid install errors in CI
-sqlalchemy2-stubs==0.0.2a8
