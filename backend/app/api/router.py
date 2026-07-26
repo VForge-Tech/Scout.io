@@ -12,6 +12,7 @@ from app.api.endpoints import (
     policies,
     retrieval,
     sessions,
+    uploads,
     webhooks,
     widget_api,
     widgets,
@@ -33,3 +34,4 @@ api_router.include_router(developer.router)
 api_router.include_router(widget_api.router)
 api_router.include_router(retrieval.router)
 api_router.include_router(admin.router)
+api_router.include_router(uploads.router)

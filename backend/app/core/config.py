@@ -47,6 +47,23 @@ class Settings(BaseSettings):
     rate_limit_per_ip: str = "100/minute"
     rate_limit_per_org: str = "1000/minute"
 
+    # Feature flags (default ON for backward compatibility)
+    qdrant_enabled: bool = True
+    litellm_enabled: bool = True
+    celery_enabled: bool = True
+
+    # Optional pgvector fallback
+    pgvector_enabled: bool = False
+
+    # Optional Ollama local LLM
+    ollama_enabled: bool = False
+    ollama_base_url: str = "http://localhost:11434"
+    ollama_embedding_model: str = "nomic-embed-text"
+    ollama_chat_model: str = "llama3.2"
+
+    # Docker compose profile selection
+    deployment_profile: str = "full"  # "full" or "minimal"
+
     model_config = {"env_file": ".env", "extra": "allow"}
 
 

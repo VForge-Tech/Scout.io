@@ -80,12 +80,15 @@ def create_knowledge_source(
     user: User = Depends(get_current_user),
 ):
     _get_chatbot(db, chatbot_id, user)
+    config = payload.config or {}
+    if payload.connector_type:
+        config["_connector_type"] = payload.connector_type
     source = KnowledgeSource(
         organization_id=user.organization_id,
         chatbot_id=chatbot_id,
         source_type=payload.source_type,
         uri=payload.uri,
-        config=payload.config,
+        config=config,
     )
     db.add(source)
     db.commit()
@@ -122,6 +125,14 @@ def update_knowledge_source(
     _get_chatbot(db, chatbot_id, user)
     source = _get_source(db, source_id, user.organization_id)
     update_data = payload.model_dump(exclude_unset=True)
+    if "connector_type" in update_data:
+        cfg = dict(source.config or {})
+        if update_data["connector_type"]:
+            cfg["_connector_type"] = update_data.pop("connector_type")
+        else:
+            cfg.pop("_connector_type", None)
+            update_data.pop("connector_type")
+        source.config = cfg
     for field, value in update_data.items():
         setattr(source, field, value)
     db.commit()

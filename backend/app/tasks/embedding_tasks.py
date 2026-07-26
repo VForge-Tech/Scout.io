@@ -27,6 +27,7 @@ def process_knowledge_source(self, source_id: str):
     from app.core.knowledge.embeddings import EmbeddingService
     from app.core.knowledge.qdrant_store import QdrantStore
     from app.core.knowledge.engine import KnowledgeEngine
+    from app.core.knowledge.connectors import ConnectorRegistry, ConnectorConfig
 
     db = SessionLocal()
     try:
@@ -87,6 +88,24 @@ def process_knowledge_source(self, source_id: str):
 
 
 def _parse_and_chunk(source) -> list[tuple[str, dict]]:
+    from app.core.knowledge.connectors import ConnectorRegistry, ConnectorConfig
+
+    connector_type = (source.config or {}).get("_connector_type")
+    if connector_type:
+        connector_cls = ConnectorRegistry.get(connector_type)
+        if connector_cls:
+            config = ConnectorConfig(
+                source_id=source.id,
+                organization_id=source.organization_id,
+                chatbot_id=source.chatbot_id,
+                source_type=source.source_type,
+                connector_type=connector_type,
+                uri=source.uri,
+                config=source.config or {},
+            )
+            return connector_cls().sync(config)
+        logger.warning("Unknown connector type %s, falling back to default parsing", connector_type)
+
     content = source.uri
 
     if source.source_type == "url":
