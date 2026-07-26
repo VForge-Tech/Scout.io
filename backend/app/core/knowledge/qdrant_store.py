@@ -1,0 +1,141 @@
+from uuid import UUID
+
+from qdrant_client import QdrantClient
+from qdrant_client.http import models as qdrant_models
+from qdrant_client.http.exceptions import UnexpectedResponse
+
+from app.core.config import get_settings
+from app.core.knowledge.embeddings import EmbeddingService
+
+settings = get_settings()
+
+
+class QdrantStore:
+    def __init__(
+        self,
+        collection_name: str | None = None,
+        embedding_service: EmbeddingService | None = None,
+    ):
+        self.client = QdrantClient(url=settings.qdrant_url)
+        self.collection_name = collection_name or settings.qdrant_collection
+        self.embedding_service = embedding_service or EmbeddingService()
+
+    def ensure_collection(self):
+        try:
+            self.client.get_collection(self.collection_name)
+        except UnexpectedResponse:
+            self.client.create_collection(
+                collection_name=self.collection_name,
+                vectors_config=qdrant_models.VectorParams(
+                    size=self.embedding_service.dimensions,
+                    distance=qdrant_models.Distance.COSINE,
+                ),
+            )
+
+    def index_chunks(
+        self,
+        chunks: list[tuple[str, dict]],
+    ):
+        self.ensure_collection()
+        texts = [c[0] for c in chunks]
+        metadatas = [c[1] for c in chunks]
+        vectors = self.embedding_service.embed_texts(texts)
+
+        points = [
+            qdrant_models.PointStruct(
+                id=metadatas[i].get("chunk_id", i),
+                vector=vectors[i],
+                payload={
+                    "text": texts[i],
+                    "source_id": str(metadatas[i].get("source_id", "")),
+                    "organization_id": str(metadatas[i].get("organization_id", "")),
+                    "chatbot_id": str(metadatas[i].get("chatbot_id", "")),
+                    "chunk_index": metadatas[i].get("chunk_index", i),
+                    **{k: str(v) if isinstance(v, UUID) else v for k, v in metadatas[i].items() if k not in ("chunk_id",)},
+                },
+            )
+            for i in range(len(texts))
+        ]
+
+        self.client.upsert(
+            collection_name=self.collection_name,
+            points=points,
+        )
+
+    def search(
+        self,
+        query: str,
+        top_k: int = 5,
+        organization_id: str | None = None,
+        chatbot_id: str | None = None,
+        score_threshold: float | None = None,
+    ) -> list[dict]:
+        query_vector = self.embedding_service.embed_query(query)
+
+        must_filters = []
+        if organization_id:
+            must_filters.append(
+                qdrant_models.FieldCondition(
+                    key="organization_id",
+                    match=qdrant_models.MatchValue(value=organization_id),
+                )
+            )
+        if chatbot_id:
+            must_filters.append(
+                qdrant_models.FieldCondition(
+                    key="chatbot_id",
+                    match=qdrant_models.MatchValue(value=chatbot_id),
+                )
+            )
+
+        filter_query = qdrant_models.Filter(must=must_filters) if must_filters else None
+
+        search_result = self.client.search(
+            collection_name=self.collection_name,
+            query_vector=query_vector,
+            limit=top_k,
+            query_filter=filter_query,
+            score_threshold=score_threshold,
+        )
+
+        return [
+            {
+                "id": str(hit.id),
+                "score": hit.score,
+                "text": hit.payload.get("text", ""),
+                "source_id": hit.payload.get("source_id", ""),
+                "chunk_index": hit.payload.get("chunk_index", 0),
+                "metadata": {k: v for k, v in hit.payload.items() if k != "text"},
+            }
+            for hit in search_result
+        ]
+
+    def delete_source_chunks(self, source_id: str):
+        self.client.delete(
+            collection_name=self.collection_name,
+            points_selector=qdrant_models.FilterSelector(
+                filter=qdrant_models.Filter(
+                    must=[
+                        qdrant_models.FieldCondition(
+                            key="source_id",
+                            match=qdrant_models.MatchValue(value=source_id),
+                        )
+                    ]
+                )
+            ),
+        )
+
+    def delete_organization_chunks(self, organization_id: str):
+        self.client.delete(
+            collection_name=self.collection_name,
+            points_selector=qdrant_models.FilterSelector(
+                filter=qdrant_models.Filter(
+                    must=[
+                        qdrant_models.FieldCondition(
+                            key="organization_id",
+                            match=qdrant_models.MatchValue(value=organization_id),
+                        )
+                    ]
+                )
+            ),
+        )

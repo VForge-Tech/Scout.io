@@ -11,11 +11,15 @@ psycopg2-binary>=2.9.9
 # Settings & Validation
 pydantic>=2.6.0
 pydantic-settings>=2.2.0
+email-validator>=2.0.0
 
 # Auth & Security
 python-jose[cryptography]>=3.3.0
 passlib[bcrypt]>=1.7.4
 bcrypt>=4.1.0
+
+# Rate Limiting
+slowapi>=0.1.9
 
 # Async Tasks & Caching
 celery>=5.3.6

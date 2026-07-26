@@ -1,0 +1,146 @@
+from uuid import UUID
+
+from fastapi import APIRouter, Depends, HTTPException, status
+from sqlalchemy.orm import Session
+
+from app.api.deps import get_current_user, get_db
+from app.models import Chatbot, KnowledgeSource, User
+from app.schemas.knowledge_source import (
+    KnowledgeSourceCreate,
+    KnowledgeSourceRead,
+    KnowledgeSourceUpdate,
+)
+
+router = APIRouter(tags=["knowledge-sources"])
+
+
+def _get_chatbot(db: Session, chatbot_id: UUID, user: User) -> Chatbot:
+    chatbot = (
+        db.query(Chatbot)
+        .filter(
+            Chatbot.id == chatbot_id,
+            Chatbot.organization_id == user.organization_id,
+        )
+        .first()
+    )
+    if not chatbot:
+        raise HTTPException(
+            status_code=status.HTTP_404_NOT_FOUND,
+            detail="Chatbot not found",
+        )
+    return chatbot
+
+
+def _get_source(db: Session, source_id: UUID, org_id: UUID) -> KnowledgeSource:
+    source = (
+        db.query(KnowledgeSource)
+        .filter(
+            KnowledgeSource.id == source_id,
+            KnowledgeSource.organization_id == org_id,
+        )
+        .first()
+    )
+    if not source:
+        raise HTTPException(
+            status_code=status.HTTP_404_NOT_FOUND,
+            detail="Knowledge source not found",
+        )
+    return source
+
+
+@router.get(
+    "/chatbots/{chatbot_id}/knowledge-sources",
+    response_model=list[KnowledgeSourceRead],
+)
+def list_knowledge_sources(
+    chatbot_id: UUID,
+    db: Session = Depends(get_db),
+    user: User = Depends(get_current_user),
+):
+    _get_chatbot(db, chatbot_id, user)
+    return (
+        db.query(KnowledgeSource)
+        .filter(
+            KnowledgeSource.organization_id == user.organization_id,
+            KnowledgeSource.chatbot_id == chatbot_id,
+        )
+        .all()
+    )
+
+
+@router.post(
+    "/chatbots/{chatbot_id}/knowledge-sources",
+    response_model=KnowledgeSourceRead,
+    status_code=status.HTTP_201_CREATED,
+)
+def create_knowledge_source(
+    chatbot_id: UUID,
+    payload: KnowledgeSourceCreate,
+    db: Session = Depends(get_db),
+    user: User = Depends(get_current_user),
+):
+    _get_chatbot(db, chatbot_id, user)
+    source = KnowledgeSource(
+        organization_id=user.organization_id,
+        chatbot_id=chatbot_id,
+        source_type=payload.source_type,
+        uri=payload.uri,
+        config=payload.config,
+    )
+    db.add(source)
+    db.commit()
+    db.refresh(source)
+
+    return source
+
+
+@router.get(
+    "/chatbots/{chatbot_id}/knowledge-sources/{source_id}",
+    response_model=KnowledgeSourceRead,
+)
+def get_knowledge_source(
+    chatbot_id: UUID,
+    source_id: UUID,
+    db: Session = Depends(get_db),
+    user: User = Depends(get_current_user),
+):
+    _get_chatbot(db, chatbot_id, user)
+    return _get_source(db, source_id, user.organization_id)
+
+
+@router.put(
+    "/chatbots/{chatbot_id}/knowledge-sources/{source_id}",
+    response_model=KnowledgeSourceRead,
+)
+def update_knowledge_source(
+    chatbot_id: UUID,
+    source_id: UUID,
+    payload: KnowledgeSourceUpdate,
+    db: Session = Depends(get_db),
+    user: User = Depends(get_current_user),
+):
+    _get_chatbot(db, chatbot_id, user)
+    source = _get_source(db, source_id, user.organization_id)
+    update_data = payload.model_dump(exclude_unset=True)
+    for field, value in update_data.items():
+        setattr(source, field, value)
+    db.commit()
+    db.refresh(source)
+    return source
+
+
+@router.delete(
+    "/chatbots/{chatbot_id}/knowledge-sources/{source_id}",
+    status_code=status.HTTP_204_NO_CONTENT,
+)
+def delete_knowledge_source(
+    chatbot_id: UUID,
+    source_id: UUID,
+    db: Session = Depends(get_db),
+    user: User = Depends(get_current_user),
+):
+    _get_chatbot(db, chatbot_id, user)
+    source = _get_source(db, source_id, user.organization_id)
+    db.delete(source)
+    db.commit()
+    return None
