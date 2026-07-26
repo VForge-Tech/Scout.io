@@ -48,6 +48,7 @@ services:
 
   qdrant:
     image: qdrant/qdrant:latest
+    profiles: ["full"]
     ports:
       - "6333:6333"
       - "6334:6334"
@@ -55,7 +56,17 @@ services:
       - qdrant_data:/qdrant/storage
     restart: unless-stopped
 
+  ollama:
+    image: ollama/ollama:latest
+    profiles: ["full", "ollama"]
+    ports:
+      - "11434:11434"
+    volumes:
+      - ollama_data:/root/.ollama
+    restart: unless-stopped
+
 volumes:
   postgres_data:
   redis_data:
   qdrant_data:
+  ollama_data:
