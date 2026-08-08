@@ -10,6 +10,11 @@ settings = get_settings()
 
 class OptimizationMemory:
     def __init__(self, redis_client=None):
+        if not settings.celery_enabled or not settings.redis_url:
+            self.client = None
+            self.ttl = settings.redis_optimization_cache_ttl
+            return
+            
         self.client = redis_client or redis.from_url(settings.redis_url)
         self.ttl = settings.redis_optimization_cache_ttl
 
@@ -18,6 +23,8 @@ class OptimizationMemory:
         return f"opt_cache:{hashlib.md5(raw.encode()).hexdigest()}"
 
     def get_cached_response(self, query: str, org_id: str) -> str | None:
+        if not self.client:
+            return None
         key = self._make_key(query, org_id)
         raw = self.client.get(key)
         if raw:
@@ -28,10 +35,14 @@ class OptimizationMemory:
         return None
 
     def cache_response(self, query: str, org_id: str, response: str):
+        if not self.client:
+            return
         key = self._make_key(query, org_id)
         self.client.setex(key, self.ttl, response)
 
     def invalidate_org_cache(self, org_id: str):
+        if not self.client:
+            return
         cursor = 0
         pattern = f"opt_cache:*"
         while True:

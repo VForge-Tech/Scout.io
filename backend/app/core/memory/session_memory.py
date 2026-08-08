@@ -11,11 +11,19 @@ SYSTEM_PROMPT = """You are Scout, an AI assistant that helps users understand th
 
 class SessionMemory:
     def __init__(self, redis_client=None):
+        if not settings.celery_enabled or not settings.redis_url:
+            self.client = None
+            self.ttl = settings.redis_session_ttl_seconds
+            self.max_messages = 20
+            return
+            
         self.client = redis_client or redis.from_url(settings.redis_url)
         self.ttl = settings.redis_session_ttl_seconds
         self.max_messages = 20
 
     def get_history(self, session_id: str) -> list[dict]:
+        if not self.client:
+            return []
         key = f"session:{session_id}:history"
         raw = self.client.lrange(key, -self.max_messages, -1)
         messages = []
@@ -27,6 +35,8 @@ class SessionMemory:
         return messages
 
     def add_message(self, session_id: str, role: str, content: str):
+        if not self.client:
+            return
         key = f"session:{session_id}:history"
         message = {"role": role, "content": content}
         self.client.rpush(key, json.dumps(message))
@@ -52,5 +62,7 @@ class SessionMemory:
         return messages
 
     def clear_session(self, session_id: str):
+        if not self.client:
+            return
         key = f"session:{session_id}:history"
         self.client.delete(key)

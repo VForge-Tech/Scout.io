@@ -16,11 +16,19 @@ class QdrantStore:
         collection_name: str | None = None,
         embedding_service: EmbeddingService | None = None,
     ):
+        if not settings.qdrant_enabled:
+            self.client = None
+            self.collection_name = collection_name or settings.qdrant_collection
+            self.embedding_service = embedding_service or EmbeddingService()
+            return
+        
         self.client = QdrantClient(url=settings.qdrant_url)
         self.collection_name = collection_name or settings.qdrant_collection
         self.embedding_service = embedding_service or EmbeddingService()
 
     def ensure_collection(self):
+        if not self.client:
+            return
         try:
             self.client.get_collection(self.collection_name)
         except UnexpectedResponse:
@@ -36,6 +44,8 @@ class QdrantStore:
         self,
         chunks: list[tuple[str, dict]],
     ):
+        if not self.client:
+            return
         self.ensure_collection()
         texts = [c[0] for c in chunks]
         metadatas = [c[1] for c in chunks]
@@ -70,6 +80,9 @@ class QdrantStore:
         chatbot_id: str | None = None,
         score_threshold: float | None = None,
     ) -> list[dict]:
+        if not self.client:
+            return []
+        
         query_vector = self.embedding_service.embed_query(query)
 
         must_filters = []
@@ -120,6 +133,9 @@ class QdrantStore:
         organization_id: str | None = None,
         chatbot_id: str | None = None,
     ) -> list[dict]:
+        if not self.client:
+            return []
+            
         keywords = query.lower().split()
         try:
             scroll_result = self.client.scroll(
@@ -159,6 +175,8 @@ class QdrantStore:
         ]
 
     def delete_source_chunks(self, source_id: str):
+        if not self.client:
+            return
         self.client.delete(
             collection_name=self.collection_name,
             points_selector=qdrant_models.FilterSelector(
@@ -174,6 +192,8 @@ class QdrantStore:
         )
 
     def delete_organization_chunks(self, organization_id: str):
+        if not self.client:
+            return
         self.client.delete(
             collection_name=self.collection_name,
             points_selector=qdrant_models.FilterSelector(
