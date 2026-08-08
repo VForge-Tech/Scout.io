@@ -27,6 +27,14 @@ async function request<T>(path: string, options: RequestOptions = {}): Promise<T
 
   if (!res.ok) {
     const error = await res.json().catch(() => ({ detail: res.statusText }));
+    // Handle auth errors
+    if (res.status === 401 || res.status === 403) {
+      if (typeof window !== 'undefined') {
+        localStorage.removeItem('access_token');
+        localStorage.removeItem('refresh_token');
+        window.location.href = '/auth/login';
+      }
+    }
     throw new Error(error.detail || 'Request failed');
   }
 
@@ -41,3 +49,14 @@ export const api = {
   patch: <T>(path: string, body?: unknown) => request<T>(path, { method: 'PATCH', body }),
   delete: <T>(path: string) => request<T>(path, { method: 'DELETE' }),
 };
+
+// Helper for pages that need to fetch arrays with proper error handling
+export async function fetchArray<T>(path: string): Promise<T[]> {
+  try {
+    const data = await api.get<T[]>(path);
+    return Array.isArray(data) ? data : [];
+  } catch (e) {
+    console.error(`Failed to fetch ${path}:`, e);
+    return [];
+  }
+}

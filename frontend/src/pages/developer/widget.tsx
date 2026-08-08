@@ -1,4 +1,5 @@
 import { useEffect, useState } from 'react';
+import { fetchArray, api } from '../../lib/api';
 import DeveloperLayout from '../../components/DeveloperLayout';
 
 export default function WidgetIntegration() {
@@ -7,25 +8,20 @@ export default function WidgetIntegration() {
   const [theme, setTheme] = useState('light');
   const [snippet, setSnippet] = useState('');
   const [copied, setCopied] = useState(false);
+  const [loading, setLoading] = useState(true);
+  const [error, setError] = useState<string | null>(null);
 
   useEffect(() => {
-    fetch('/api/v1/chatbots', {
-      headers: { Authorization: `Bearer ${localStorage.getItem('access_token')}` },
-    })
-      .then((r) => r.json())
-      .then(setChatbots)
-      .catch(() => {});
+    fetchArray<any>('/chatbots')
+      .then((data) => { setChatbots(data); setLoading(false); })
+      .catch((e: any) => { setError(e.message); setLoading(false); });
   }, []);
 
   const generateSnippet = async () => {
     if (!selectedBot) return;
     try {
-      const res = await fetch(
-        `/api/v1/developer/widget-snippet?chatbot_id=${selectedBot}&theme=${theme}`,
-        { headers: { Authorization: `Bearer ${localStorage.getItem('access_token')}` } }
-      );
-      const data = await res.json();
-      setSnippet(data.snippet);
+      const res = await api.get<any>(`/developer/widget-snippet?chatbot_id=${selectedBot}&theme=${theme}`);
+      setSnippet(res.snippet);
       setCopied(false);
     } catch {}
   };
@@ -83,7 +79,9 @@ export default function WidgetIntegration() {
           </div>
         )}
 
-        {!selectedBot && (
+        {loading && <p className="text-gray-500">Loading chatbots...</p>}
+        {error && <p className="text-red-500 mb-4">{error}</p>}
+        {!selectedBot && !loading && !error && (
           <div className="bg-blue-50 text-blue-700 px-4 py-3 rounded">
             Select a chatbot to generate your widget embed code.
           </div>

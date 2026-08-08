@@ -1,25 +1,25 @@
 import { useEffect, useState } from 'react';
+import { fetchArray, api } from '../../lib/api';
 import AdminLayout from '../../components/AdminLayout';
 
 export default function AuditLogs() {
   const [logs, setLogs] = useState<any[]>([]);
   const [loading, setLoading] = useState(true);
+  const [error, setError] = useState<string | null>(null);
   const [page, setPage] = useState(0);
 
   useEffect(() => {
-    fetch(`/api/v1/admin/audit-logs?limit=50&offset=${page * 50}`, {
-      headers: { Authorization: `Bearer ${localStorage.getItem('access_token')}` },
-    })
-      .then((r) => r.json())
+    fetchArray<any>(`/admin/audit-logs?limit=50&offset=${page * 50}`)
       .then((d) => { setLogs(d); setLoading(false); })
-      .catch(() => setLoading(false));
+      .catch((e: any) => { setError(e.message); setLoading(false); });
   }, [page]);
 
   return (
     <AdminLayout>
       <h2 className="text-2xl font-bold text-gray-900 mb-6">Audit Logs</h2>
       {loading && <p className="text-gray-500">Loading...</p>}
-      {!loading && (
+      {error && <p className="text-red-500 mb-4">{error}</p>}
+      {!loading && !error && (
         <>
           <div className="bg-white rounded-lg shadow overflow-hidden">
             <table className="min-w-full divide-y divide-gray-200">

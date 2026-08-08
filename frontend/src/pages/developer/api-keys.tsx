@@ -1,37 +1,35 @@
 import { useEffect, useState } from 'react';
+import { fetchArray, api } from '../../lib/api';
 import DeveloperLayout from '../../components/DeveloperLayout';
 
 export default function ApiKeysPage() {
   const [keys, setKeys] = useState<any[]>([]);
   const [loading, setLoading] = useState(true);
+  const [error, setError] = useState<string | null>(null);
   const [showNew, setShowNew] = useState(false);
   const [newKey, setNewKey] = useState<any>(null);
   const [keyName, setKeyName] = useState('');
   const [message, setMessage] = useState('');
 
-  const fetchKeys = () => {
-    fetch('/api/v1/developer/api-keys', {
-      headers: { Authorization: `Bearer ${localStorage.getItem('access_token')}` },
-    })
-      .then((r) => r.json())
-      .then((d) => { setKeys(d); setLoading(false); })
-      .catch(() => setLoading(false));
+  const fetchKeys = async () => {
+    try {
+      setLoading(true);
+      setError(null);
+      const data = await fetchArray<any>('/developer/api-keys');
+      setKeys(data);
+    } catch (e: any) {
+      setError(e.message);
+    } finally {
+      setLoading(false);
+    }
   };
 
   useEffect(() => { fetchKeys(); }, []);
 
   const createKey = async () => {
     try {
-      const res = await fetch('/api/v1/developer/api-keys', {
-        method: 'POST',
-        headers: {
-          'Content-Type': 'application/json',
-          Authorization: `Bearer ${localStorage.getItem('access_token')}`,
-        },
-        body: JSON.stringify({ name: keyName, expires_in_days: 365 }),
-      });
-      const data = await res.json();
-      setNewKey(data);
+      const res = await api.post<any>('/developer/api-keys', { name: keyName, expires_in_days: 365 });
+      setNewKey(res);
       setShowNew(false);
       setKeyName('');
       fetchKeys();
@@ -41,10 +39,7 @@ export default function ApiKeysPage() {
   };
 
   const revokeKey = async (id: string) => {
-    await fetch(`/api/v1/developer/api-keys/${id}`, {
-      method: 'DELETE',
-      headers: { Authorization: `Bearer ${localStorage.getItem('access_token')}` },
-    });
+    await api.delete(`/developer/api-keys/${id}`);
     fetchKeys();
   };
 
@@ -62,6 +57,9 @@ export default function ApiKeysPage() {
 
       {message && (
         <div className="bg-red-50 text-red-700 px-4 py-2 rounded mb-4">{message}</div>
+      )}
+      {error && (
+        <div className="bg-red-50 text-red-700 px-4 py-2 rounded mb-4">{error}</div>
       )}
 
       {showNew && (
@@ -100,7 +98,8 @@ export default function ApiKeysPage() {
       )}
 
       {loading && <p className="text-gray-500">Loading...</p>}
-      {!loading && (
+      {error && <p className="text-red-500 mb-4">{error}</p>}
+      {!loading && !error && (
         <div className="bg-white rounded-lg shadow overflow-hidden">
           <table className="min-w-full divide-y divide-gray-200">
             <thead className="bg-gray-50">

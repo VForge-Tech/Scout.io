@@ -1,30 +1,29 @@
 import { useEffect, useState } from 'react';
+import { fetchArray, api } from '../../lib/api';
 import AdminLayout from '../../components/AdminLayout';
 
 export default function AdminOrganizations() {
   const [orgs, setOrgs] = useState<any[]>([]);
   const [loading, setLoading] = useState(true);
+  const [error, setError] = useState<string | null>(null);
 
-  const fetchOrgs = () => {
-    fetch('/api/v1/admin/organizations', {
-      headers: { Authorization: `Bearer ${localStorage.getItem('access_token')}` },
-    })
-      .then((r) => r.json())
-      .then((d) => { setOrgs(d); setLoading(false); })
-      .catch(() => setLoading(false));
+  const fetchOrgs = async () => {
+    try {
+      setLoading(true);
+      setError(null);
+      const data = await fetchArray<any>('/admin/organizations');
+      setOrgs(data);
+    } catch (e: any) {
+      setError(e.message);
+    } finally {
+      setLoading(false);
+    }
   };
 
   useEffect(() => { fetchOrgs(); }, []);
 
   const suspendOrg = async (id: string) => {
-    await fetch(`/api/v1/admin/organizations/${id}`, {
-      method: 'PATCH',
-      headers: {
-        'Content-Type': 'application/json',
-        Authorization: `Bearer ${localStorage.getItem('access_token')}`,
-      },
-      body: JSON.stringify({ suspended: true }),
-    });
+    await api.patch(`/admin/organizations/${id}`, { suspended: true });
     fetchOrgs();
   };
 
@@ -32,7 +31,8 @@ export default function AdminOrganizations() {
     <AdminLayout>
       <h2 className="text-2xl font-bold text-gray-900 mb-6">Organizations</h2>
       {loading && <p className="text-gray-500">Loading...</p>}
-      {!loading && (
+      {error && <p className="text-red-500 mb-4">{error}</p>}
+      {!loading && !error && (
         <div className="bg-white rounded-lg shadow overflow-hidden">
           <table className="min-w-full divide-y divide-gray-200">
             <thead className="bg-gray-50">

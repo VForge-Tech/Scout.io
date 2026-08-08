@@ -545,13 +545,13 @@ export const initWidget = (config: ChatWidgetProps) => {
   document.body.appendChild(container);
 
   const root = React.createElement(ChatWidget, config);
-  const { createRoot } = require('react-dom/client');
-  const reactRoot = createRoot(container);
-  reactRoot.render(root);
+  import('react-dom/client').then(({ createRoot }) => {
+    const reactRoot = createRoot(container);
+    reactRoot.render(root);
+  });
 
   return {
     destroy: () => {
-      reactRoot.unmount();
       container.remove();
     },
     open: () => {},

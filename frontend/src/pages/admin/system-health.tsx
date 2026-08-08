@@ -1,17 +1,16 @@
 import { useEffect, useState } from 'react';
+import { fetchArray, api } from '../../lib/api';
 import AdminLayout from '../../components/AdminLayout';
 
 export default function SystemHealth() {
   const [health, setHealth] = useState<any>(null);
   const [loading, setLoading] = useState(true);
+  const [error, setError] = useState<string | null>(null);
 
   useEffect(() => {
-    fetch('/api/v1/admin/health', {
-      headers: { Authorization: `Bearer ${localStorage.getItem('access_token')}` },
-    })
-      .then((r) => r.json())
+    api.get<any>('/admin/health')
       .then((d) => { setHealth(d); setLoading(false); })
-      .catch(() => setLoading(false));
+      .catch((e: any) => { setError(e.message); setLoading(false); });
   }, []);
 
   const statusColor = (status: string) => {
@@ -24,11 +23,12 @@ export default function SystemHealth() {
     <AdminLayout>
       <h2 className="text-2xl font-bold text-gray-900 mb-6">System Health</h2>
       {loading && <p className="text-gray-500">Loading...</p>}
+      {error && <p className="text-red-500 mb-4">{error}</p>}
       {health && (
         <div className="space-y-4">
           <div className="flex items-center space-x-3 mb-6">
-            <span className={`px-3 py-1 rounded-full text-sm font-medium ${statusColor(health.status)}`}>
-              {health.status.toUpperCase()}
+            <span className={`px-3 py-1 rounded-full text-sm font-medium ${statusColor(health.status?.toUpperCase() || 'UNKNOWN')}`}>
+              {health.status?.toUpperCase() || 'UNKNOWN'}
             </span>
           </div>
           <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
@@ -37,15 +37,15 @@ export default function SystemHealth() {
                 <div className="flex items-center justify-between">
                   <h3 className="text-lg font-medium text-gray-900 capitalize">{service}</h3>
                   <span className={`px-2 py-1 rounded text-xs font-medium ${
-                    status === 'healthy' || status === 'ok'
+                    (status === 'healthy' || status === 'ok' || (typeof status === 'object' && status?.status === 'healthy'))
                       ? 'bg-green-100 text-green-800'
                       : 'bg-red-100 text-red-800'
                   }`}>
-                    {status === 'healthy' || status === 'ok' ? 'OK' : 'ERROR'}
+                    {(status === 'healthy' || status === 'ok' || (typeof status === 'object' && status?.status === 'healthy')) ? 'OK' : 'ERROR'}
                   </span>
                 </div>
-                {status !== 'healthy' && status !== 'ok' && (
-                  <p className="mt-2 text-sm text-red-600">{status}</p>
+                {((status !== 'healthy' && status !== 'ok') || (typeof status === 'object' && status?.status !== 'healthy')) && (
+                  <p className="mt-2 text-sm text-red-600">{typeof status === 'object' ? status?.error || JSON.stringify(status) : status}</p>
                 )}
               </div>
             ))}
