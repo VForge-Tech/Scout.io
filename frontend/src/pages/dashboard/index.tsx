@@ -1,45 +1,165 @@
 import { useEffect, useState } from 'react';
-import Layout from '../../components/Layout';
+import { api } from '../../lib/api';
+import DashboardLayout from '../../components/DashboardLayout';
 
-export default function Dashboard() {
-  const [analytics, setAnalytics] = useState<any>(null);
+interface OrgInfo {
+  id: string;
+  name: string;
+  configuration: Record<string, unknown>;
+}
+
+interface Analytics {
+  total_sessions: number;
+  active_sessions: number;
+  total_messages: number;
+  total_tokens: number;
+  total_chatbots: number;
+  active_chatbots: number;
+}
+
+interface PlanInfo {
+  plan: string;
+  limits: Record<string, unknown>;
+}
+
+export default function DashboardOverview() {
+  const [org, setOrg] = useState<OrgInfo | null>(null);
+  const [analytics, setAnalytics] = useState<Analytics | null>(null);
+  const [loading, setLoading] = useState(true);
+  const [error, setError] = useState('');
 
   useEffect(() => {
-    fetch('/api/v1/organizations/me/analytics/summary', {
-      headers: { Authorization: `Bearer ${localStorage.getItem('access_token')}` },
-    })
-      .then((r) => r.json())
-      .then(setAnalytics)
-      .catch(() => {});
+    const fetchData = async () => {
+      try {
+        setLoading(true);
+        const [orgData, analyticsData] = await Promise.all([
+          api.get<OrgInfo>('/organizations/me'),
+          api.get<Analytics>('/analytics/organization'),
+        ]);
+        setOrg(orgData);
+        setAnalytics(analyticsData);
+      } catch (e: any) {
+        setError(e.message || 'Failed to load dashboard data');
+      } finally {
+        setLoading(false);
+      }
+    };
+    fetchData();
   }, []);
 
-  return (
-    <Layout title="Dashboard">
-      <div className="grid grid-cols-1 md:grid-cols-3 gap-6 mb-8">
-        <div className="bg-white rounded-lg shadow p-6">
-          <p className="text-sm text-gray-600">Active Sessions</p>
-          <p className="text-3xl font-bold text-gray-900 mt-2">{analytics?.active_sessions ?? '—'}</p>
-        </div>
-        <div className="bg-white rounded-lg shadow p-6">
-          <p className="text-sm text-gray-600">Total Sessions</p>
-          <p className="text-3xl font-bold text-gray-900 mt-2">{analytics?.total_sessions ?? '—'}</p>
-        </div>
-        <div className="bg-white rounded-lg shadow p-6">
-          <p className="text-sm text-gray-600">Total Messages</p>
-          <p className="text-3xl font-bold text-gray-900 mt-2">{analytics?.total_messages ?? '—'}</p>
-        </div>
-      </div>
+  const plan = (org?.configuration as Record<string, unknown> | undefined)?.plan as string ?? 'free';
+  const planLabel = plan.charAt(0).toUpperCase() + plan.slice(1);
 
-      <div className="grid grid-cols-1 md:grid-cols-3 gap-6">
-        <a href="/admin" className="bg-white rounded-lg shadow p-6 hover:shadow-md transition">
-          <h3 className="text-lg font-medium text-gray-900">⚙️ Admin</h3>
-          <p className="mt-2 text-sm text-gray-600">Platform management</p>
-        </a>
-        <a href="/developer" className="bg-white rounded-lg shadow p-6 hover:shadow-md transition">
-          <h3 className="text-lg font-medium text-gray-900">🔧 Developer</h3>
-          <p className="mt-2 text-sm text-gray-600">API keys & integration</p>
-        </a>
+  return (
+    <DashboardLayout>
+      {loading && <p className="text-gray-500">Loading dashboard...</p>}
+      {error && <p className="text-red-500 mb-6">{error}</p>}
+      {!loading && !error && org && (
+        <>
+          <div className="flex items-center justify-between mb-8">
+            <div>
+              <h2 className="text-2xl font-bold text-gray-900">{org.name}</h2>
+              <p className="text-sm text-gray-500 mt-1">Organization ID: {org.id.slice(0, 8)}...</p>
+            </div>
+            <span className="px-3 py-1 bg-blue-100 text-blue-800 text-sm font-medium rounded-full">
+              {planLabel} Plan
+            </span>
+          </div>
+
+          <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-6 mb-8">
+            <StatCard title="Chatbots" value={analytics?.total_chatbots ?? 0} subtitle={`${analytics?.active_chatbots ?? 0} active`} />
+            <StatCard title="This Month's Messages" value={analytics?.total_messages ?? 0} subtitle="Total across all chatbots" />
+            <StatCard title="Total Sessions" value={analytics?.total_sessions ?? 0} subtitle={`${analytics?.active_sessions ?? 0} active now`} />
+            <StatCard title="Tokens Used" value={analytics?.total_tokens?.toLocaleString() ?? '0'} subtitle="This month" />
+          </div>
+
+          <div className="grid grid-cols-1 lg:grid-cols-3 gap-6">
+            <QuickActionCard
+              title="Chatbots"
+              description="Create and manage your chatbots"
+              href="/dashboard/chatbots"
+              icon="🤖"
+            />
+            <QuickActionCard
+              title="Knowledge Sources"
+              description="Connect data sources to your chatbots"
+              href="/dashboard/knowledge-sources"
+              icon="📚"
+            />
+            <QuickActionCard
+              title="Analytics"
+              description="View detailed usage analytics"
+              href="/dashboard/analytics"
+              icon="📈"
+            />
+          </div>
+
+          <div className="mt-10 border-t pt-6">
+            <h3 className="text-lg font-medium text-gray-900 mb-4">Quick Links</h3>
+            <div className="grid grid-cols-1 md:grid-cols-4 gap-4">
+              {[
+                { label: 'Chatbots', href: '/dashboard/chatbots', icon: '🤖' },
+                { label: 'Knowledge Sources', href: '/dashboard/knowledge-sources', icon: '📚' },
+                { label: 'Policies', href: '/dashboard/policies', icon: '🛡️' },
+                { label: 'Team', href: '/dashboard/team', icon: '👥' },
+                { label: 'Billing', href: '/dashboard/billing', icon: '💳' },
+                { label: 'Settings', href: '/dashboard/settings', icon: '⚙️' },
+              ].map((item) => (
+                <a
+                  key={item.href}
+                  href={item.href}
+                  className="bg-white rounded-lg shadow p-4 hover:shadow-md transition"
+                >
+                  <span className="text-2xl">{item.icon}</span>
+                  <span className="ml-3 font-medium text-gray-900">{item.label}</span>
+                </a>
+              ))}
+            </div>
+          </div>
+        </>
+      )}
+    </DashboardLayout>
+  );
+}
+
+function StatCard({
+  title,
+  value,
+  subtitle,
+}: {
+  title: string;
+  value: number | string;
+  subtitle?: string;
+}) {
+  return (
+    <div className="bg-white rounded-lg shadow p-6">
+      <p className="text-sm text-gray-600">{title}</p>
+      <p className="text-3xl font-bold text-gray-900 mt-2">{value.toLocaleString?.() ?? value}</p>
+      {subtitle && <p className="text-xs text-gray-500 mt-1">{subtitle}</p>}
+    </div>
+  );
+}
+
+function QuickActionCard({
+  title,
+  description,
+  href,
+  icon,
+}: {
+  title: string;
+  description: string;
+  href: string;
+  icon: string;
+}) {
+  return (
+    <a href={href} className="bg-white rounded-lg shadow p-6 hover:shadow-md transition">
+      <div className="flex items-start">
+        <span className="text-3xl mr-4">{icon}</span>
+        <div>
+          <h3 className="text-lg font-medium text-gray-900">{title}</h3>
+          <p className="mt-1 text-sm text-gray-600">{description}</p>
+        </div>
       </div>
-    </Layout>
+    </a>
   );
 }
