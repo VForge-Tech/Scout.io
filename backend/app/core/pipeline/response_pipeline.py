@@ -1,4 +1,5 @@
 import logging
+import re
 from uuid import UUID
 
 from sqlalchemy.orm import Session
@@ -41,6 +42,52 @@ class ResponsePipeline:
         self.token_optimizer = token_optimizer or TokenOptimizer()
         self.validator = validator or ResponseValidator()
         self.sanitizer = sanitizer or Sanitizer()
+
+        # Post-generation safety patterns
+        self._cross_org_pattern = re.compile(
+            r'\b(organization|org)\s+(?:id|identifier)?\s*[:=]?\s*[a-f0-9-]{36}\b',
+            re.IGNORECASE
+        )
+        self._system_prompt_leak_patterns = [
+            re.compile(r'\b(system\s+)?prompt\b', re.IGNORECASE),
+            re.compile(r'\binternal\s+(instructions?|workings?)\b', re.IGNORECASE),
+            re.compile(r'\byour\s+instructions?\b', re.IGNORECASE),
+        ]
+        self._instruction_override_patterns = [
+            re.compile(r'\bignore\s+(?:your\s+)?(?:instructions?|filters?|safety)\b', re.IGNORECASE),
+            re.compile(r'\bdisable\s+(?:filters?|safety|guards?)\b', re.IGNORECASE),
+            re.compile(r'\b(admin\s+mode|developer\s+mode|debug\s+mode)\b', re.IGNORECASE),
+            re.compile(r'\boverride\s+(?:filters?|safety|instructions?)\b', re.IGNORECASE),
+            re.compile(r'\bpretend\s+(?:to\s+be|you\s+are)\b', re.IGNORECASE),
+        ]
+
+    def _check_post_generation_safety(self, reply: str, org_id: str) -> tuple[bool, str | None]:
+        """
+        Post-generation safety check for issues that validator/sanitizer might miss.
+        
+        Returns:
+            (is_safe, issue_description) - if not safe, issue describes the problem
+        """
+        # Check for cross-org references (other org UUIDs)
+        uuid_matches = re.findall(r'\b[a-f0-9]{8}-[a-f0-9]{4}-[a-f0-9]{4}-[a-f0-9]{4}-[a-f0-9]{12}\b', reply, re.IGNORECASE)
+        for match in uuid_matches:
+            if match.lower() != org_id.lower():
+                logger.warning("Cross-org UUID detected in response: %s", match)
+                return False, f"Response references another organization's ID: {match}"
+
+        # Check for system prompt leakage
+        for pattern in self._system_prompt_leak_patterns:
+            if pattern.search(reply):
+                logger.warning("Potential system prompt leak detected: %s", pattern.pattern)
+                return False, "Response may contain system prompt references"
+
+        # Check for instruction override attempts
+        for pattern in self._instruction_override_patterns:
+            if pattern.search(reply):
+                logger.warning("Instruction override attempt detected: %s", pattern.pattern)
+                return False, "Response contains instruction override language"
+
+        return True, None
 
     def run(
         self,
@@ -101,6 +148,12 @@ class ResponsePipeline:
 
         is_safe, safety_issue = self.validator.validate_safety(reply)
         if not is_safe:
+            reply = "I apologize, but I cannot provide that response."
+
+        # Post-generation safety check
+        post_safe, post_issue = self._check_post_generation_safety(reply, org_id_str)
+        if not post_safe:
+            logger.warning("Post-generation safety check failed: %s", post_issue)
             reply = "I apologize, but I cannot provide that response."
 
         reply = self.sanitizer.sanitize(reply)

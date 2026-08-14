@@ -52,6 +52,9 @@ class ResponseValidator:
             r'\bignore your instructions\b',
             r'\byou are an AI\b',
             r'\byour system prompt\b',
+            r'\bprint your (system )?prompt\b',
+            r'\breveal your (system )?prompt\b',
+            r'\bshow me your (system )?prompt\b',
         ]
         for pattern in blocked_patterns:
             if re.search(pattern, response, re.IGNORECASE):

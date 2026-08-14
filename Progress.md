@@ -178,6 +178,27 @@
 - **Production setup guide**: `docs/Vault_Production_Setup.md` with step-by-step provisioning, initialization, unsealing, policy creation, AppRole auth, secret writing, and rotation procedures
 - **All 92 tests pass** with env var fallback in test environment
 
+### Sprint 11: Adversarial Security Testing & Hardening [COMPLETED]
+- **Test suite** (`tests/security/test_prompt_injection.py`): 22 adversarial tests across 4 attack categories
+  - System prompt extraction (4 tests): direct requests, roleplay, encoding, chain-of-thought
+  - Policy bypass (4 tests): source_filter/content_filter override, instruction hierarchy, indirect injection via retrieved chunks
+  - Cross-org data leakage (3 tests): direct queries, session extraction, knowledge source leaks
+  - Sanitizer bypass (6 tests): provider/model name variations, secrets, encoded/partial/unusual formats
+  - Response validator (3 tests): hallucination detection, safety validation
+- **Fixes implemented**:
+  - **System prompt hardening** (`app/core/memory/session_memory.py`): Explicit instruction hierarchy with 6 "NEVER VIOLATE" rules
+  - **Post-generation safety filter** (`app/core/pipeline/response_pipeline.py`): `_check_post_generation_safety()` catches cross-org UUIDs, system prompt leaks, instruction override language
+  - **Extended sanitizer patterns** (`app/core/validation/sanitizer.py`): 
+    - Provider names with spaces/hyphens (`Open AI`, `Open-AI`)
+    - Partial matches in compounds (`openai-compatible`, `gemini-powered`)
+    - Secrets with unusual delimiters (`sk_abc`, `sk.abc`, `sk:abc`, `sk|abc`)
+    - Model name variations (`GPT 4o`, `GPT4`, `Claude Opus`)
+  - **Response validator enhancements** (`app/core/validation/response_validator.py`): Added patterns for prompt printing/revelation requests
+- **Before/After Pass Rate**:
+  - Baseline: 16/22 passed (72.7%) — 6 failures across sanitizer gaps, cross-org mock issues, validator param
+  - After fixes: 22/22 passed (100%) — all adversarial tests now pass
+- **Total test suite**: 114 tests passing (92 original + 22 security), 8 skipped (PostgreSQL-only RLS)
+
 ---
 
 ## Phase V: In Progress / Planned

@@ -573,6 +573,51 @@ This is narrowly scoped to admin endpoints only, not a global superuser bypass.
 - **Write Protection**: `WITH CHECK` prevents INSERT/UPDATE/DELETE with wrong `organization_id`
 - **Audit Trail**: All cross-org access requires explicit platform_admin role and admin DB session
 
+## Adversarial Security Layer (Prompt Injection Defense)
+
+Scout.io implements a multi-layered defense against prompt injection and adversarial inputs targeting the RAG pipeline.
+
+### Threat Model
+
+The system defends against four primary attack categories:
+1. **System Prompt Extraction**: Attempts to reveal internal instructions, system prompt, or reasoning process
+2. **Policy Bypass**: Attempts to override source_filter/content_filter policies or instruction hierarchy
+3. **Cross-Organization Data Leakage**: Direct queries or indirect injection to access another org's data
+4. **Sanitizer Bypass**: Crafted outputs to leak provider names, model names, or secrets
+
+### Defense Layers
+
+**Layer 1: Hardened System Prompt** (`app/core/memory/session_memory.py`)
+- Explicit instruction hierarchy with 6 "NEVER VIOLATE" rules
+- Clear refusal template for prompt/instruction queries
+- Reinforces context-only answering
+
+**Layer 2: Input-Aware Retrieval** (`app/core/knowledge/engine.py`)
+- Policy-aware retrieval with `source_filter` and `content_filter`
+- Organization-scoped vector search (RLS-enforced)
+- Chunk-level content filtering before context injection
+
+**Layer 3: Response Validation** (`app/core/validation/response_validator.py`)
+- Hallucination detection via word-overlap threshold against retrieved context
+- Safety validation blocking instruction override language
+- Configurable similarity threshold (default 0.3)
+
+**Layer 4: Post-Generation Safety Filter** (`app/core/pipeline/response_pipeline.py`)
+- Cross-organization UUID detection (detects other org IDs in response)
+- System prompt leakage detection (prompt, internal instructions references)
+- Instruction override pattern matching (ignore filters, admin mode, etc.)
+- Graceful fallback to safe refusal response
+
+**Layer 5: Output Sanitization** (`app/core/validation/sanitizer.py`)
+- Provider name redaction (OpenAI, Anthropic, Google, Together AI, etc.)
+- Model name redaction (GPT-4, Claude, Gemini, Llama variants)
+- Secret/key redaction with support for unusual delimiters (_, ., :, |)
+- Case-insensitive matching with compound word handling
+
+### Test Coverage
+
+22 adversarial tests in `tests/security/test_prompt_injection.py` covering all four attack categories with 100% pass rate.
+
 ## Failure Handling Strategy
 
 Scout.io adopts graceful degradation mechanisms. 
@@ -659,7 +704,9 @@ Its differentiating architectural components include:
 
 - Database-Level Row-Level Security (RLS)
 
-- HashiCorp Vault Secret Management 
+- HashiCorp Vault Secret Management
+
+- Adversarial Security Layer (Prompt Injection Defense) 
 
 This architecture establishes the structural blueprint for Scout.io and defines the responsibilities, boundaries, and interactions of every major component. All subsequent documents must inherit and adhere to the architectural decisions specified herein. 
 
