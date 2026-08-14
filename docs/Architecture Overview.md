@@ -657,7 +657,9 @@ Its differentiating architectural components include:
 
 - Configurable Behaviour Framework 
 
-- Database-Level Row-Level Security (RLS) 
+- Database-Level Row-Level Security (RLS)
+
+- HashiCorp Vault Secret Management 
 
 This architecture establishes the structural blueprint for Scout.io and defines the responsibilities, boundaries, and interactions of every major component. All subsequent documents must inherit and adhere to the architectural decisions specified herein. 
 

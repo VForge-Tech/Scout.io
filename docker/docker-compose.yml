@@ -1,4 +1,21 @@
 services:
+  vault:
+    image: hashicorp/vault:1.15
+    ports:
+      - "8200:8200"
+    environment:
+      VAULT_DEV_ROOT_TOKEN_ID: "dev-root-token"
+      VAULT_DEV_LISTEN_ADDRESS: "0.0.0.0:8200"
+    cap_add:
+      - IPC_LOCK
+    restart: unless-stopped
+    healthcheck:
+      test: ["CMD", "vault", "status"]
+      interval: 10s
+      timeout: 5s
+      retries: 5
+      start_period: 10s
+
   backend:
     build:
       context: ../backend
@@ -7,6 +24,9 @@ services:
       - "8000:8000"
     env_file:
       - ../backend/.env
+    environment:
+      - VAULT_ADDR=http://vault:8200
+      - VAULT_TOKEN=dev-root-token
     depends_on:
       postgres:
         condition: service_healthy
@@ -14,6 +34,8 @@ services:
         condition: service_healthy
       qdrant:
         condition: service_started
+      vault:
+        condition: service_healthy
     restart: unless-stopped
 
   postgres:

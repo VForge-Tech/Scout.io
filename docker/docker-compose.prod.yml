@@ -1,8 +1,29 @@
 services:
+  vault:
+    image: hashicorp/vault:1.15
+    environment:
+      VAULT_LOCAL_CONFIG: '{"backend": {"file": {"path": "/vault/file"}}, "listener": {"tcp": {"address": "0.0.0.0:8200", "tls_disable": true}}}'
+      VAULT_API_ADDR: "http://vault:8200"
+      VAULT_CLUSTER_ADDR: "https://vault:8201"
+    cap_add:
+      - IPC_LOCK
+    volumes:
+      - vault_data:/vault/file
+      - vault_logs:/vault/logs
+    restart: always
+    healthcheck:
+      test: ["CMD", "vault", "status"]
+      interval: 30s
+      timeout: 10s
+      retries: 3
+      start_period: 30s
+
   backend:
     restart: always
     environment:
       - DEBUG=false
+      - VAULT_ADDR=http://vault:8200
+      - VAULT_TOKEN=${VAULT_TOKEN}
     deploy:
       resources:
         limits:
@@ -11,6 +32,9 @@ services:
         reservations:
           cpus: '0.5'
           memory: 1G
+    depends_on:
+      vault:
+        condition: service_healthy
 
   frontend:
     build:
@@ -44,9 +68,14 @@ services:
     command: celery -A app.tasks.embedding_tasks.celery_app worker --loglevel=info
     env_file:
       - ../backend/.env
+    environment:
+      - VAULT_ADDR=http://vault:8200
+      - VAULT_TOKEN=${VAULT_TOKEN}
     depends_on:
       - redis
       - postgres
+      - vault
+        condition: service_healthy
     restart: always
     deploy:
       resources:
@@ -61,9 +90,14 @@ services:
     command: celery -A app.tasks.analytics_tasks.celery_app beat --loglevel=info
     env_file:
       - ../backend/.env
+    environment:
+      - VAULT_ADDR=http://vault:8200
+      - VAULT_TOKEN=${VAULT_TOKEN}
     depends_on:
       - redis
       - postgres
+      - vault
+        condition: service_healthy
     restart: always
 
   qdrant:
@@ -101,3 +135,5 @@ volumes:
   qdrant_data:
   ollama_data:
   pgvector_data:
+  vault_data:
+  vault_logs:

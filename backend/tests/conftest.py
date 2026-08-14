@@ -1,10 +1,22 @@
 from collections.abc import Generator
 from unittest.mock import patch
 
+import os
 import pytest
 from fastapi.testclient import TestClient
 from sqlalchemy import create_engine
 from sqlalchemy.orm import sessionmaker
+
+# Set required environment variables BEFORE importing app modules
+# This allows the secret manager to fall back to env vars when Vault is unavailable
+os.environ.setdefault("DATABASE_URL", "sqlite:///./test_scout.db")
+os.environ.setdefault("REDIS_URL", "redis://localhost:6379/0")
+os.environ.setdefault("QDRANT_URL", "http://localhost:6333")
+os.environ.setdefault("JWT_SECRET", "test-jwt-secret-min-32-chars-long")
+os.environ.setdefault("CELERY_BROKER_URL", "redis://localhost:6379/1")
+os.environ.setdefault("CELERY_RESULT_BACKEND", "redis://localhost:6379/1")
+os.environ.setdefault("DEPLOYMENT_ENV", "development")
+os.environ.setdefault("VAULT_ADDR", "http://localhost:8200")
 
 from app.api.deps import get_db, get_db_admin, get_db_with_org, get_db_for_admin, get_current_user
 from app.core.config import get_settings

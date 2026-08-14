@@ -3,16 +3,20 @@ from typing import ClassVar
 
 from pydantic_settings import BaseSettings
 
+from app.core.secrets import get_secret_manager, init_secret_manager
+
 
 class Settings(BaseSettings):
     app_name: str = "Scout.io"
     debug: bool = False
 
-    database_url: str = "postgresql://scout:changeme@localhost:5432/scout"
-    redis_url: str = "redis://localhost:6379/0"
-    qdrant_url: str = "http://localhost:6333"
+    # These will be populated from Vault/env at runtime
+    database_url: str = ""
+    redis_url: str = ""
+    qdrant_url: str = ""
+    qdrant_api_key: str | None = None
 
-    jwt_secret: str = "change-me-to-a-random-secret"
+    jwt_secret: str = ""
     jwt_algorithm: str = "HS256"
     jwt_expiration_minutes: int = 30
     jwt_refresh_expire_days: int = 7
@@ -21,6 +25,7 @@ class Settings(BaseSettings):
     anthropic_api_key: str | None = None
     together_api_key: str | None = None
     gemini_api_key: str | None = None
+    azure_openai_api_key: str | None = None
 
     embedding_model: str = "text-embedding-3-small"
     embedding_dimension: int = 1536
@@ -39,8 +44,8 @@ class Settings(BaseSettings):
     redis_knowledge_cache_ttl: int = 300
     redis_optimization_cache_ttl: int = 600
 
-    celery_broker_url: str = "redis://localhost:6379/1"
-    celery_result_backend: str = "redis://localhost:6379/1"
+    celery_broker_url: str = ""
+    celery_result_backend: str = ""
 
     cors_origins: list[str] = ["http://localhost:3000", "http://localhost:8000"]
 
@@ -65,6 +70,28 @@ class Settings(BaseSettings):
     deployment_profile: str = "full"  # "full" or "minimal"
 
     model_config = {"env_file": ".env", "extra": "allow"}
+
+    def __init__(self, **kwargs):
+        # Initialize secret manager before calling parent init
+        secret_manager = get_secret_manager()
+        # Populate secret fields from Vault/env
+        secrets = {
+            "database_url": secret_manager.get_database_url(),
+            "redis_url": secret_manager.get_redis_url(),
+            "qdrant_url": secret_manager.get_qdrant_url(),
+            "qdrant_api_key": secret_manager.get_qdrant_api_key(),
+            "jwt_secret": secret_manager.get_jwt_secret(),
+            "openai_api_key": secret_manager.get_openai_api_key(),
+            "anthropic_api_key": secret_manager.get_anthropic_api_key(),
+            "together_api_key": secret_manager.get_together_api_key(),
+            "gemini_api_key": secret_manager.get_gemini_api_key(),
+            "azure_openai_api_key": secret_manager.get_azure_openai_api_key(),
+            "celery_broker_url": secret_manager.get_celery_broker_url(),
+            "celery_result_backend": secret_manager.get_celery_result_backend(),
+        }
+        # Merge with any provided kwargs (kwargs takes precedence)
+        merged = {**secrets, **kwargs}
+        super().__init__(**merged)
 
 
 @lru_cache

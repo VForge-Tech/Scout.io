@@ -1,4 +1,5 @@
 import logging
+import os
 from contextlib import asynccontextmanager
 
 from fastapi import FastAPI
@@ -9,8 +10,23 @@ from slowapi.middleware import SlowAPIMiddleware
 
 from app.api.router import api_router
 from app.core.config import get_settings
+from app.core.secrets import init_secret_manager
 
 settings = get_settings()
+
+# Initialize secret manager at module load time
+# In production, Vault is required. In development, falls back to env vars.
+_deployment_env = os.getenv("DEPLOYMENT_ENV", "development")
+_require_vault = _deployment_env == "production"
+_vault_url = os.getenv("VAULT_ADDR")
+_vault_token = os.getenv("VAULT_TOKEN")
+
+init_secret_manager(
+    vault_url=_vault_url,
+    vault_token=_vault_token,
+    env=_deployment_env,
+    require_vault=_require_vault,
+)
 
 
 @asynccontextmanager

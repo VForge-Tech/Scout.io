@@ -163,6 +163,21 @@
 - **Tests**: 15 tests covering app-level isolation (works on SQLite) and PostgreSQL RLS behavior (skipped on SQLite)
 - **All 100 tests pass** (92 passing, 8 skipped PostgreSQL-only RLS tests)
 
+### Sprint 10: HashiCorp Vault Secret Management [COMPLETED]
+- **Vault service**: Added to docker-compose.yml (dev mode) and docker-compose.prod.yml (production file backend with auto-unseal support)
+- **Vault client wrapper** (`app/core/secrets.py`): hvac-based client with KV v2 support, availability checking, and secret read/write/delete operations
+- **SecretManager**: High-level wrapper that fetches from Vault with environment variable fallback for local development
+  - Production: Vault required, fails fast if unavailable or secret missing
+  - Development: Falls back to environment variables if Vault unreachable
+  - Path convention: `secret/scout-io/<environment>/<key>` (e.g., `secret/scout-io/production/database_url`)
+- **Config integration** (`app/core/config.py`): Settings class now populates all secret fields from SecretManager at initialization
+  - Required secrets: database_url, redis_url, qdrant_url, qdrant_api_key, jwt_secret, celery_broker_url, celery_result_backend
+  - Optional secrets: openai_api_key, anthropic_api_key, together_api_key, gemini_api_key, azure_openai_api_key, webhook_secret
+- **Early initialization**: Secret manager initialized at module load in `app/main.py` with deployment environment detection
+- **Documentation**: `.env.example` files updated to document Vault path convention and remove secret placeholders
+- **Production setup guide**: `docs/Vault_Production_Setup.md` with step-by-step provisioning, initialization, unsealing, policy creation, AppRole auth, secret writing, and rotation procedures
+- **All 92 tests pass** with env var fallback in test environment
+
 ---
 
 ## Phase V: In Progress / Planned
