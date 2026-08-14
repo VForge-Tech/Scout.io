@@ -32,5 +32,8 @@ dist/
 .DS_Store
 Thumbs.db
 
+Issues.md
+scout-io-phase-v-prompts.md
+
 # Docker
 docker-data/

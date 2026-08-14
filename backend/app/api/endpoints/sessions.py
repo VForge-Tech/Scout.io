@@ -1,7 +1,7 @@
 from fastapi import APIRouter, Depends
 from sqlalchemy.orm import Session
 
-from app.api.deps import get_current_user, get_db
+from app.api.deps import get_current_user, get_db_with_org
 from app.models import ChatSession, Message, User
 
 router = APIRouter(prefix="/organizations/me/sessions", tags=["sessions"])
@@ -9,7 +9,7 @@ router = APIRouter(prefix="/organizations/me/sessions", tags=["sessions"])
 
 @router.get("")
 def list_sessions(
-    db: Session = Depends(get_db),
+    db: Session = Depends(get_db_with_org),
     user: User = Depends(get_current_user),
 ):
     sessions = (

@@ -3,7 +3,7 @@ from uuid import UUID
 from fastapi import APIRouter, Depends, HTTPException, status
 from sqlalchemy.orm import Session
 
-from app.api.deps import get_current_user, get_db
+from app.api.deps import get_current_user, get_db_with_org
 from app.models import User, Webhook
 from app.schemas.webhook import WebhookCreate, WebhookRead
 from app.utils.audit import create_audit_log
@@ -14,7 +14,7 @@ router = APIRouter(prefix="/webhooks", tags=["webhooks"])
 @router.post("", response_model=WebhookRead, status_code=status.HTTP_201_CREATED)
 def create_webhook(
     payload: WebhookCreate,
-    db: Session = Depends(get_db),
+    db: Session = Depends(get_db_with_org),
     user: User = Depends(get_current_user),
 ):
     webhook = Webhook(
@@ -37,7 +37,7 @@ def create_webhook(
 
 @router.get("", response_model=list[WebhookRead])
 def list_webhooks(
-    db: Session = Depends(get_db),
+    db: Session = Depends(get_db_with_org),
     user: User = Depends(get_current_user),
 ):
     return (
@@ -53,7 +53,7 @@ def list_webhooks(
 @router.delete("/{webhook_id}", status_code=status.HTTP_204_NO_CONTENT)
 def delete_webhook(
     webhook_id: UUID,
-    db: Session = Depends(get_db),
+    db: Session = Depends(get_db_with_org),
     user: User = Depends(get_current_user),
 ):
     webhook = (

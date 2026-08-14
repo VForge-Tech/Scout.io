@@ -7,7 +7,7 @@ from sqlalchemy.orm import Session
 
 from app.core.config import get_settings
 from app.core.security import decode_token
-from app.db.session import get_db
+from app.db.session import get_db, get_db_for_admin
 from app.models import Organization, User
 
 security_scheme = HTTPBearer(auto_error=False)
@@ -44,6 +44,16 @@ def get_current_user(
     return user
 
 
+def get_db_with_org(current_user: User = Depends(get_current_user)) -> Generator[Session, None, None]:
+    """Get a database session with the current user's organization context set for RLS."""
+    yield from get_db(current_user.organization_id)
+
+
+def get_db_admin() -> Generator[Session, None, None]:
+    """Get a database session with platform admin bypass enabled for cross-org operations."""
+    yield from get_db_for_admin()
+
+
 def get_current_organization(
     current_user: User = Depends(get_current_user),
     db: Session = Depends(get_db),
@@ -62,6 +72,16 @@ def require_admin(current_user: User = Depends(get_current_user)) -> User:
         raise HTTPException(
             status_code=status.HTTP_403_FORBIDDEN,
             detail="Admin privileges required",
+        )
+    return current_user
+
+
+def require_platform_admin(current_user: User = Depends(get_current_user)) -> User:
+    """Require platform admin role for cross-organization operations."""
+    if current_user.role != "platform_admin":
+        raise HTTPException(
+            status_code=status.HTTP_403_FORBIDDEN,
+            detail="Platform admin privileges required",
         )
     return current_user
 

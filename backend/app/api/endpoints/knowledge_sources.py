@@ -3,7 +3,7 @@ from uuid import UUID
 from fastapi import APIRouter, Depends, HTTPException, status
 from sqlalchemy.orm import Session
 
-from app.api.deps import get_current_user, get_db
+from app.api.deps import get_current_user, get_db_with_org
 from app.models import Chatbot, KnowledgeSource, User
 from app.schemas.knowledge_source import (
     KnowledgeSourceCreate,
@@ -54,7 +54,7 @@ def _get_source(db: Session, source_id: UUID, org_id: UUID) -> KnowledgeSource:
 )
 def list_knowledge_sources(
     chatbot_id: UUID,
-    db: Session = Depends(get_db),
+    db: Session = Depends(get_db_with_org),
     user: User = Depends(get_current_user),
 ):
     _get_chatbot(db, chatbot_id, user)
@@ -76,7 +76,7 @@ def list_knowledge_sources(
 def create_knowledge_source(
     chatbot_id: UUID,
     payload: KnowledgeSourceCreate,
-    db: Session = Depends(get_db),
+    db: Session = Depends(get_db_with_org),
     user: User = Depends(get_current_user),
 ):
     _get_chatbot(db, chatbot_id, user)
@@ -104,7 +104,7 @@ def create_knowledge_source(
 def get_knowledge_source(
     chatbot_id: UUID,
     source_id: UUID,
-    db: Session = Depends(get_db),
+    db: Session = Depends(get_db_with_org),
     user: User = Depends(get_current_user),
 ):
     _get_chatbot(db, chatbot_id, user)
@@ -119,7 +119,7 @@ def update_knowledge_source(
     chatbot_id: UUID,
     source_id: UUID,
     payload: KnowledgeSourceUpdate,
-    db: Session = Depends(get_db),
+    db: Session = Depends(get_db_with_org),
     user: User = Depends(get_current_user),
 ):
     _get_chatbot(db, chatbot_id, user)
@@ -147,7 +147,7 @@ def update_knowledge_source(
 def delete_knowledge_source(
     chatbot_id: UUID,
     source_id: UUID,
-    db: Session = Depends(get_db),
+    db: Session = Depends(get_db_with_org),
     user: User = Depends(get_current_user),
 ):
     _get_chatbot(db, chatbot_id, user)

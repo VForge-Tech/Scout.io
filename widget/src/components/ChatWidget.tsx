@@ -2,6 +2,7 @@ import React, { useState, useEffect, useRef, useCallback } from 'react';
 import { ThemeProvider, useTheme, Theme } from './ThemeProvider';
 import { MessageList } from './MessageList';
 import { InputBox } from './InputBox';
+import type { CSSProperties } from 'react';
 
 export interface ChatWidgetProps {
   chatbotId: string;
@@ -37,6 +38,15 @@ interface WidgetMessageResponse {
 }
 
 const generateId = () => `${Date.now()}-${Math.random().toString(36).substr(2, 9)}`;
+
+const adjustColor = (color: string, amount: number): string => {
+  const hex = color.replace('#', '');
+  const num = parseInt(hex, 16);
+  const r = Math.max(0, Math.min(255, (num >> 16) + amount));
+  const g = Math.max(0, Math.min(255, ((num >> 8) & 0x00FF) + amount));
+  const b = Math.max(0, Math.min(255, (num & 0x0000FF) + amount));
+  return `#${((r << 16) | (g << 8) | b).toString(16).padStart(6, '0')}`;
+};
 
 const ChatWidgetInner: React.FC<ChatWidgetProps> = ({
   chatbotId,
@@ -74,15 +84,6 @@ const ChatWidgetInner: React.FC<ChatWidgetProps> = ({
         },
       }
     : themeObj;
-
-  const adjustColor = (color: string, amount: number): string => {
-    const hex = color.replace('#', '');
-    const num = parseInt(hex, 16);
-    const r = Math.max(0, Math.min(255, (num >> 16) + amount));
-    const g = Math.max(0, Math.min(255, ((num >> 8) & 0x00FF) + amount));
-    const b = Math.max(0, Math.min(255, (num & 0x0000FF) + amount));
-    return `#${((r << 16) | (g << 8) | b).toString(16).padStart(6, '0')}`;
-  };
 
   const createSession = useCallback(async () => {
     try {
@@ -189,7 +190,7 @@ const ChatWidgetInner: React.FC<ChatWidgetProps> = ({
 
   const clearError = () => setError(null);
 
-  const handleKeyDown = (e: React.KeyboardEvent) => {
+  const handleKeyDown = (e: KeyboardEvent) => {
     if (e.key === 'Escape') closeWidget();
   };
 
@@ -209,9 +210,9 @@ const ChatWidgetInner: React.FC<ChatWidgetProps> = ({
     bottom: '24px',
     [position === 'bottom-right' ? 'right' : 'left']: '24px',
     zIndex: 9999,
-  };
+  } as CSSProperties;
 
-  const buttonStyles = {
+  const buttonStyles: CSSProperties = {
     position: 'fixed',
     ...positionStyles,
     width: '56px',
@@ -229,7 +230,7 @@ const ChatWidgetInner: React.FC<ChatWidgetProps> = ({
     animation: isMinimized ? 'pulse 2s infinite' : 'none',
   };
 
-  const widgetStyles = {
+  const widgetStyles: CSSProperties = {
     position: 'fixed',
     ...positionStyles,
     width: '380px',
@@ -251,18 +252,27 @@ const ChatWidgetInner: React.FC<ChatWidgetProps> = ({
 
   if (typeof window === 'undefined') return null;
 
+  // Inject global styles for animations
+  useEffect(() => {
+    const style = document.createElement('style');
+    style.textContent = `
+      @keyframes pulse {
+        0%, 100% { box-shadow: 0 0 0 0 rgba(37, 99, 235, 0.4); }
+        50% { box-shadow: 0 0 0 10px rgba(37, 99, 235, 0); }
+      }
+      @keyframes slideUp {
+        from { opacity: 0; transform: translateY(10px); }
+        to { opacity: 1; transform: translateY(0); }
+      }
+    `;
+    document.head.appendChild(style);
+    return () => {
+      document.head.removeChild(style);
+    };
+  }, []);
+
   return (
     <>
-      <style jsx global>{`
-        @keyframes pulse {
-          0%, 100% { box-shadow: 0 0 0 0 rgba(37, 99, 235, 0.4); }
-          50% { box-shadow: 0 0 0 10px rgba(37, 99, 235, 0); }
-        }
-        @keyframes slideUp {
-          from { opacity: 0; transform: translateY(10px); }
-          to { opacity: 1; transform: translateY(0); }
-        }
-      `}</style>
 
       {!isOpen && !isMinimized && (
         <button

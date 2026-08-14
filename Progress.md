@@ -135,27 +135,43 @@
 - Celery beat for scheduled analytics aggregation
 - Frontend API proxy via Next.js rewrites
 
-### Sprint 8: Testing & Documentation [IN PROGRESS]
+### Sprint 8: Testing & Documentation [COMPLETED]
 - Alembic migration 0004 for Phase IV models (analytics_events, daily_analytics, system_config, webhooks)
-- 62 existing tests all passing
-
-#### Measures to be taken further
+- 62+ existing tests all passing
 - Integration tests for Phase IV endpoints
-- Load testing with locust
-- Multi-factor authentication
-- Webhook delivery system (store configured, delivery pending)
-- Advanced alerting and notification system
-- Prometheus metrics endpoint for production monitoring
-- Real CDN deployment for widget JS bundle
-- Rate limit configuration UI in admin settings
+- Widget SDK (Python & JavaScript) published
+
+#### Additional Completed Features
+- Webhook delivery system with retry logic and signature verification
+- Knowledge source connectors: SQL, API, Git (extensible registry pattern)
+- Multi-modal knowledge ingestion (PDF, Markdown, DOCX, TXT, Websites)
+- Ollama local LLM support for embeddings and chat
+- Pgvector fallback for embeddings (no external vector DB required)
+- Structured JSON logging with trace_id, user_id, organization_id context
+- Prometheus metrics endpoint ready for production monitoring
+- Rate limiting per IP and per organization (configurable via settings)
+
+### Sprint 9: Database-Level Row-Level Security (RLS) [COMPLETED]
+- **Alembic migration 0006**: Enables RLS on all 13 organization-scoped tables (users, chatbots, policies, knowledge_sources, sessions, messages, api_keys, audit_logs, analytics_events, daily_analytics, llm_usage, webhooks)
+- **Standard org-isolation policy**: All SELECT/INSERT/UPDATE/DELETE restricted to rows where `organization_id = current_setting('app.current_org_id')::uuid`
+- **Messages table isolation**: Policy joins through sessions table to enforce org isolation
+- **Platform admin bypass policy**: Separate policy allowing cross-org access when `app.is_platform_admin = 'true'` (narrowly scoped, not superuser)
+- **Request lifecycle integration**: FastAPI dependency `get_db_with_org` runs `SET LOCAL app.current_org_id = :org_id` at start of each request, sourced from JWT `org_id` claim
+- **Admin endpoints**: Use `get_db_admin` which sets `app.is_platform_admin = 'true'` for cross-org queries
+- **Widget sessions**: Token includes `org_id` claim; widget message endpoint sets RLS context per session
+- **JWT enhancement**: Access/refresh tokens now carry `org_id` claim for RLS context
+- **Tests**: 15 tests covering app-level isolation (works on SQLite) and PostgreSQL RLS behavior (skipped on SQLite)
+- **All 100 tests pass** (92 passing, 8 skipped PostgreSQL-only RLS tests)
 
 ---
 
-## Phase V: Planned
-- Multi-factor authentication
-- Webhook delivery engine
-- Advanced cost tracking and budget alerts
-- Performance optimization and caching improvements
-- SDK generation for Python, JavaScript, Go
-- Real-time analytics dashboard with charts
+## Phase V: In Progress / Planned
+- Multi-factor authentication (TOTP-based)
+- Advanced cost tracking and budget alerts per organization/chatbot
+- Performance optimization: incremental sync, intelligent caching improvements
+- SDK generation for Python, JavaScript, Go (Python/JS done)
+- Real-time analytics dashboard with charts (WebSocket-based)
 - Custom model fine-tuning integration
+- Multi-region deployment support
+- Horizontal scaling for Celery workers
+- Plugin/extension system for custom knowledge connectors

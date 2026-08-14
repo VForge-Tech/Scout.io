@@ -6,6 +6,7 @@ from sqlalchemy.orm import Session
 from app.api.deps import get_db, optional_current_user
 from app.core.pipeline.response_pipeline import ResponsePipeline
 from app.core.security import create_access_token, decode_token
+from app.db.session import get_db as get_db_base
 from app.models import ChatSession as SessionModel
 from app.models import Chatbot, Message, Organization, Policy, User
 from app.schemas.widget import (
@@ -38,6 +39,29 @@ def _get_widget_session(db: Session, token: str) -> SessionModel:
     return session
 
 
+def get_widget_session(
+    request: Request,
+    db: Session = Depends(get_db),
+) -> SessionModel:
+    """Dependency to get widget session from Authorization header and set RLS context."""
+    auth_header = request.headers.get("Authorization", "")
+    token = auth_header.replace("Bearer ", "")
+    if not token:
+        raise HTTPException(
+            status_code=status.HTTP_401_UNAUTHORIZED,
+            detail="Missing widget token",
+        )
+
+    session = _get_widget_session(db, token)
+
+    # Set RLS context for this session's organization
+    from app.db.session import get_db as get_db_base
+    from sqlalchemy import text
+    db.execute(text("SET LOCAL app.current_org_id = :oid"), {"oid": str(session.organization_id)})
+
+    return session
+
+
 @router.post("/sessions", response_model=WidgetSessionResponse)
 def create_widget_session(
     payload: WidgetSessionCreate,
@@ -62,9 +86,9 @@ def create_widget_session(
 
     token = create_access_token(
         subject=str(session.id),
+        organization_id=chatbot.organization_id,
         extra_claims={
             "type": "widget",
-            "org_id": str(chatbot.organization_id),
             "chatbot_id": str(chatbot.id),
         },
     )
@@ -80,17 +104,8 @@ def send_widget_message(
     payload: WidgetMessageRequest,
     request: Request,
     db: Session = Depends(get_db),
+    session: SessionModel = Depends(get_widget_session),
 ):
-    auth_header = request.headers.get("Authorization", "")
-    token = auth_header.replace("Bearer ", "")
-    if not token:
-        raise HTTPException(
-            status_code=status.HTTP_401_UNAUTHORIZED,
-            detail="Missing widget token",
-        )
-
-    session = _get_widget_session(db, token)
-
     user_msg = Message(
         session_id=session.id,
         role="user",

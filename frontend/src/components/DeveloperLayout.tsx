@@ -5,6 +5,7 @@ const devItems = [
   { label: 'API Keys', href: '/developer/api-keys', icon: '🔑' },
   { label: 'API Docs', href: '/developer/docs', icon: '📖' },
   { label: 'Widget Integration', href: '/developer/widget', icon: '💬' },
+  { label: 'API Testing', href: '/developer/api-test', icon: '🧪' },
 ];
 
 export default function DeveloperLayout({ children }: { children: React.ReactNode }) {

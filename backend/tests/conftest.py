@@ -6,10 +6,12 @@ from fastapi.testclient import TestClient
 from sqlalchemy import create_engine
 from sqlalchemy.orm import sessionmaker
 
+from app.api.deps import get_db, get_db_admin, get_db_with_org, get_db_for_admin, get_current_user
 from app.core.config import get_settings
 from app.db.base import Base
-from app.db.session import get_db
+from app.db.session import get_db as get_db_base
 from app.main import app
+from app.models import User
 
 TEST_DATABASE_URL = "sqlite:///./test_scout.db"
 
@@ -25,6 +27,31 @@ def override_get_db() -> Generator:
         yield db
     finally:
         db.close()
+
+
+def override_get_db_with_org() -> Generator:
+    """Override for get_db_with_org - SQLite doesn't support RLS, so just yield db."""
+    db = TestingSessionLocal()
+    try:
+        yield db
+    finally:
+        db.close()
+
+
+def override_get_db_admin() -> Generator:
+    """Override for get_db_admin - SQLite doesn't support RLS, so just yield db."""
+    db = TestingSessionLocal()
+    try:
+        yield db
+    finally:
+        db.close()
+
+
+def override_get_current_user() -> User:
+    """Override for get_current_user - return a test user for authenticated endpoints."""
+    # This is a minimal mock - tests that need a real user should create one in the test
+    # and use the client fixture with manually set headers
+    raise pytest.skip("Test requires manual auth setup")
 
 
 @pytest.fixture(autouse=True)
@@ -45,7 +72,12 @@ def db():
 
 @pytest.fixture
 def client() -> Generator:
+    # Override database dependencies to use test DB
     app.dependency_overrides[get_db] = override_get_db
+    app.dependency_overrides[get_db_with_org] = override_get_db_with_org
+    app.dependency_overrides[get_db_admin] = override_get_db_admin
+    app.dependency_overrides[get_db_for_admin] = override_get_db_admin
+    
     with TestClient(app) as c:
         yield c
     app.dependency_overrides.clear()

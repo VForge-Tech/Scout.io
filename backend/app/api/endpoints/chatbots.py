@@ -3,7 +3,7 @@ from uuid import UUID
 from fastapi import APIRouter, Depends, HTTPException, Request, status
 from sqlalchemy.orm import Session
 
-from app.api.deps import get_current_user, get_db
+from app.api.deps import get_current_user, get_db_with_org
 from app.models import Chatbot, User
 from app.schemas.chatbot import ChatbotCreate, ChatbotRead, ChatbotUpdate
 from app.utils.audit import create_audit_log
@@ -30,7 +30,7 @@ def _get_chatbot(db: Session, chatbot_id: UUID, user: User) -> Chatbot:
 
 @router.get("", response_model=list[ChatbotRead])
 def list_chatbots(
-    db: Session = Depends(get_db),
+    db: Session = Depends(get_db_with_org),
     user: User = Depends(get_current_user),
 ):
     return (
@@ -44,7 +44,7 @@ def list_chatbots(
 def create_chatbot(
     payload: ChatbotCreate,
     request: Request,
-    db: Session = Depends(get_db),
+    db: Session = Depends(get_db_with_org),
     user: User = Depends(get_current_user),
 ):
     chatbot = Chatbot(
@@ -69,7 +69,7 @@ def create_chatbot(
 @router.get("/{chatbot_id}", response_model=ChatbotRead)
 def get_chatbot(
     chatbot_id: UUID,
-    db: Session = Depends(get_db),
+    db: Session = Depends(get_db_with_org),
     user: User = Depends(get_current_user),
 ):
     return _get_chatbot(db, chatbot_id, user)
@@ -79,7 +79,7 @@ def get_chatbot(
 def update_chatbot(
     chatbot_id: UUID,
     payload: ChatbotUpdate,
-    db: Session = Depends(get_db),
+    db: Session = Depends(get_db_with_org),
     user: User = Depends(get_current_user),
 ):
     chatbot = _get_chatbot(db, chatbot_id, user)
@@ -95,7 +95,7 @@ def update_chatbot(
 def delete_chatbot(
     chatbot_id: UUID,
     request: Request,
-    db: Session = Depends(get_db),
+    db: Session = Depends(get_db_with_org),
     user: User = Depends(get_current_user),
 ):
     chatbot = _get_chatbot(db, chatbot_id, user)

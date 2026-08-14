@@ -3,7 +3,7 @@ from uuid import UUID
 from fastapi import APIRouter, Depends, HTTPException, Query, status
 from sqlalchemy.orm import Session
 
-from app.api.deps import get_current_user, get_db
+from app.api.deps import get_current_user, get_db_with_org
 from app.core.knowledge.engine import KnowledgeEngine
 from app.models import Chatbot, Policy, User
 
@@ -15,7 +15,7 @@ def debug_retrieve(
     query: str = Query(..., description="Search query"),
     chatbot_id: UUID | None = Query(None, description="Optional chatbot ID filter"),
     top_k: int = Query(5, ge=1, le=20),
-    db: Session = Depends(get_db),
+    db: Session = Depends(get_db_with_org),
     user: User = Depends(get_current_user),
 ):
     chatbot = None

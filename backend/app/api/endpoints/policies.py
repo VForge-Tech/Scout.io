@@ -3,7 +3,7 @@ from uuid import UUID
 from fastapi import APIRouter, Depends, HTTPException, status
 from sqlalchemy.orm import Session
 
-from app.api.deps import get_current_user, get_db
+from app.api.deps import get_current_user, get_db_with_org
 from app.models import Chatbot, Policy, User
 from app.schemas.policy import PolicyCreate, PolicyRead, PolicyUpdate
 
@@ -47,7 +47,7 @@ def _get_policy(db: Session, policy_id: UUID, org_id: UUID) -> Policy:
 )
 def list_policies(
     chatbot_id: UUID,
-    db: Session = Depends(get_db),
+    db: Session = Depends(get_db_with_org),
     user: User = Depends(get_current_user),
 ):
     _get_chatbot(db, chatbot_id, user)
@@ -69,7 +69,7 @@ def list_policies(
 def create_policy(
     chatbot_id: UUID,
     payload: PolicyCreate,
-    db: Session = Depends(get_db),
+    db: Session = Depends(get_db_with_org),
     user: User = Depends(get_current_user),
 ):
     _get_chatbot(db, chatbot_id, user)
@@ -93,7 +93,7 @@ def create_policy(
 def get_policy(
     chatbot_id: UUID,
     policy_id: UUID,
-    db: Session = Depends(get_db),
+    db: Session = Depends(get_db_with_org),
     user: User = Depends(get_current_user),
 ):
     _get_chatbot(db, chatbot_id, user)
@@ -108,7 +108,7 @@ def update_policy(
     chatbot_id: UUID,
     policy_id: UUID,
     payload: PolicyUpdate,
-    db: Session = Depends(get_db),
+    db: Session = Depends(get_db_with_org),
     user: User = Depends(get_current_user),
 ):
     _get_chatbot(db, chatbot_id, user)
@@ -128,7 +128,7 @@ def update_policy(
 def delete_policy(
     chatbot_id: UUID,
     policy_id: UUID,
-    db: Session = Depends(get_db),
+    db: Session = Depends(get_db_with_org),
     user: User = Depends(get_current_user),
 ):
     _get_chatbot(db, chatbot_id, user)
@@ -143,7 +143,7 @@ def delete_policy(
     response_model=list[PolicyRead],
 )
 def list_org_policies(
-    db: Session = Depends(get_db),
+    db: Session = Depends(get_db_with_org),
     user: User = Depends(get_current_user),
 ):
     return (
@@ -163,7 +163,7 @@ def list_org_policies(
 )
 def create_org_policy(
     payload: PolicyCreate,
-    db: Session = Depends(get_db),
+    db: Session = Depends(get_db_with_org),
     user: User = Depends(get_current_user),
 ):
     policy = Policy(

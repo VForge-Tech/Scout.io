@@ -6,8 +6,14 @@ export default function AdminOrganizations() {
   const [orgs, setOrgs] = useState<any[]>([]);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
+  const [mounted, setMounted] = useState(false);
+
+  useEffect(() => {
+    setMounted(true);
+  }, []);
 
   const fetchOrgs = async () => {
+    if (!mounted) return;
     try {
       setLoading(true);
       setError(null);
@@ -20,7 +26,7 @@ export default function AdminOrganizations() {
     }
   };
 
-  useEffect(() => { fetchOrgs(); }, []);
+  useEffect(() => { if (mounted) fetchOrgs(); }, [mounted]);
 
   const suspendOrg = async (id: string) => {
     await api.patch(`/admin/organizations/${id}`, { suspended: true });

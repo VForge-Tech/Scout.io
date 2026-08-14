@@ -4,7 +4,7 @@ from fastapi import APIRouter, Depends, HTTPException, status
 from sqlalchemy import func
 from sqlalchemy.orm import Session
 
-from app.api.deps import get_current_user, get_db, require_admin
+from app.api.deps import get_current_user, get_db_admin, get_db_with_org, require_platform_admin
 from app.models import (
     AnalyticsEvent,
     ChatSession,
@@ -29,7 +29,7 @@ router = APIRouter(tags=["analytics"])
 @router.get("/analytics/chatbot/{chatbot_id}", response_model=ChatbotAnalyticsResponse)
 def get_chatbot_analytics(
     chatbot_id: UUID,
-    db: Session = Depends(get_db),
+    db: Session = Depends(get_db_with_org),
     user: User = Depends(get_current_user),
 ):
     chatbot = (
@@ -97,7 +97,7 @@ def get_chatbot_analytics(
 
 @router.get("/analytics/organization", response_model=OrgAnalyticsResponse)
 def get_org_analytics(
-    db: Session = Depends(get_db),
+    db: Session = Depends(get_db_with_org),
     user: User = Depends(get_current_user),
 ):
     org_id = user.organization_id
@@ -155,7 +155,7 @@ def get_org_analytics(
 @router.get("/analytics/source/{source_id}", response_model=SourceAnalyticsResponse)
 def get_source_analytics(
     source_id: UUID,
-    db: Session = Depends(get_db),
+    db: Session = Depends(get_db_with_org),
     user: User = Depends(get_current_user),
 ):
     source = (
@@ -192,8 +192,8 @@ def get_source_analytics(
 
 @router.get("/admin/analytics/platform", response_model=PlatformAnalyticsResponse)
 def get_platform_analytics(
-    db: Session = Depends(get_db),
-    admin: User = Depends(require_admin),
+    db: Session = Depends(get_db_admin),
+    admin: User = Depends(require_platform_admin),
 ):
     return PlatformAnalyticsResponse(
         total_organizations=db.query(func.count(Organization.id)).scalar() or 0,
@@ -212,7 +212,7 @@ def track_event(
     chatbot_id: str | None = None,
     source_id: str | None = None,
     payload: dict = {},
-    db: Session = Depends(get_db),
+    db: Session = Depends(get_db_with_org),
     user: User = Depends(get_current_user),
 ):
     event = AnalyticsEvent(

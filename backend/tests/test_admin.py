@@ -6,7 +6,7 @@ from app.core.security import hash_password
 from app.models import Organization, User
 
 
-def _seed(db, admin_role="admin"):
+def _seed(db, admin_role="platform_admin"):
     org = Organization(id=uuid.uuid4(), name="Test Org")
     db.add(org)
     user = User(
@@ -23,7 +23,7 @@ def _seed(db, admin_role="admin"):
 
 
 def _admin_headers(client, db):
-    _seed(db, admin_role="admin")
+    _seed(db, admin_role="platform_admin")
     resp = client.post(
         "/api/v1/auth/login",
         json={"email": "admin@test.com", "password": "testpass123"},

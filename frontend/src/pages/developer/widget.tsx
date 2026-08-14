@@ -10,12 +10,18 @@ export default function WidgetIntegration() {
   const [copied, setCopied] = useState(false);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
+  const [mounted, setMounted] = useState(false);
 
   useEffect(() => {
+    setMounted(true);
+  }, []);
+
+  useEffect(() => {
+    if (!mounted) return;
     fetchArray<any>('/chatbots')
       .then((data) => { setChatbots(data); setLoading(false); })
       .catch((e: any) => { setError(e.message); setLoading(false); });
-  }, []);
+  }, [mounted]);
 
   const generateSnippet = async () => {
     if (!selectedBot) return;

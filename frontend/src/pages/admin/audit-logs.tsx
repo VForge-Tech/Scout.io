@@ -7,12 +7,18 @@ export default function AuditLogs() {
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
   const [page, setPage] = useState(0);
+  const [mounted, setMounted] = useState(false);
 
   useEffect(() => {
+    setMounted(true);
+  }, []);
+
+  useEffect(() => {
+    if (!mounted) return;
     fetchArray<any>(`/admin/audit-logs?limit=50&offset=${page * 50}`)
       .then((d) => { setLogs(d); setLoading(false); })
       .catch((e: any) => { setError(e.message); setLoading(false); });
-  }, [page]);
+  }, [page, mounted]);
 
   return (
     <AdminLayout>

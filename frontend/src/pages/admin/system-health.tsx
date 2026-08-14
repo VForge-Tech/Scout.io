@@ -6,12 +6,18 @@ export default function SystemHealth() {
   const [health, setHealth] = useState<any>(null);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
+  const [mounted, setMounted] = useState(false);
 
   useEffect(() => {
+    setMounted(true);
+  }, []);
+
+  useEffect(() => {
+    if (!mounted) return;
     api.get<any>('/admin/health')
       .then((d) => { setHealth(d); setLoading(false); })
       .catch((e: any) => { setError(e.message); setLoading(false); });
-  }, []);
+  }, [mounted]);
 
   const statusColor = (status: string) => {
     if (status === 'healthy') return 'bg-green-100 text-green-800';

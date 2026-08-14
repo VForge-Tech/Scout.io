@@ -34,9 +34,13 @@ def login(payload: LoginRequest, request: Request, db: Session = Depends(get_db)
 
     access_token = create_access_token(
         subject=str(user.id),
-        extra_claims={"org_id": str(user.organization_id), "role": user.role},
+        organization_id=user.organization_id,
+        extra_claims={"role": user.role},
     )
-    refresh_token = create_refresh_token(subject=str(user.id))
+    refresh_token = create_refresh_token(
+        subject=str(user.id),
+        organization_id=user.organization_id,
+    )
 
     return TokenResponse(access_token=access_token, refresh_token=refresh_token)
 
@@ -59,9 +63,13 @@ def refresh(payload: RefreshRequest, db: Session = Depends(get_db)):
 
     access_token = create_access_token(
         subject=str(user.id),
-        extra_claims={"org_id": str(user.organization_id), "role": user.role},
+        organization_id=user.organization_id,
+        extra_claims={"role": user.role},
     )
-    refresh_token = create_refresh_token(subject=str(user.id))
+    refresh_token = create_refresh_token(
+        subject=str(user.id),
+        organization_id=user.organization_id,
+    )
 
     return TokenResponse(access_token=access_token, refresh_token=refresh_token)
 

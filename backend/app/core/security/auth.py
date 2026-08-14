@@ -1,4 +1,5 @@
 from datetime import datetime, timedelta, timezone
+from uuid import UUID
 
 import bcrypt
 from jose import JWTError, jwt
@@ -16,7 +17,9 @@ def verify_password(plain: str, hashed: str) -> bool:
     return bcrypt.checkpw(plain.encode("utf-8"), hashed.encode("utf-8"))
 
 
-def create_access_token(subject: str, extra_claims: dict | None = None) -> str:
+def create_access_token(
+    subject: str, organization_id: UUID | str | None = None, extra_claims: dict | None = None
+) -> str:
     expire = datetime.now(timezone.utc) + timedelta(
         minutes=settings.jwt_expiration_minutes
     )
@@ -26,12 +29,16 @@ def create_access_token(subject: str, extra_claims: dict | None = None) -> str:
         "iat": datetime.now(timezone.utc),
         "type": "access",
     }
+    if organization_id is not None:
+        payload["org_id"] = str(organization_id)
     if extra_claims:
         payload.update(extra_claims)
     return jwt.encode(payload, settings.jwt_secret, algorithm="HS256")
 
 
-def create_refresh_token(subject: str, extra_claims: dict | None = None) -> str:
+def create_refresh_token(
+    subject: str, organization_id: UUID | str | None = None, extra_claims: dict | None = None
+) -> str:
     expire = datetime.now(timezone.utc) + timedelta(days=settings.jwt_refresh_expire_days)
     payload = {
         "sub": subject,
@@ -39,6 +46,8 @@ def create_refresh_token(subject: str, extra_claims: dict | None = None) -> str:
         "iat": datetime.now(timezone.utc),
         "type": "refresh",
     }
+    if organization_id is not None:
+        payload["org_id"] = str(organization_id)
     if extra_claims:
         payload.update(extra_claims)
     return jwt.encode(payload, settings.jwt_secret, algorithm="HS256")

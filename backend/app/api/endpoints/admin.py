@@ -4,7 +4,7 @@ from fastapi import APIRouter, Depends, HTTPException, Request, status
 from sqlalchemy import func
 from sqlalchemy.orm import Session
 
-from app.api.deps import get_current_user, get_db, require_admin
+from app.api.deps import get_db_admin, get_db_with_org, require_admin, require_platform_admin
 from app.models import (
     ApiKey,
     Chatbot,
@@ -26,8 +26,8 @@ router = APIRouter(prefix="/admin", tags=["admin"])
 
 @router.get("/organizations", response_model=list[OrganizationRead])
 def list_organizations(
-    db: Session = Depends(get_db),
-    admin: User = Depends(require_admin),
+    db: Session = Depends(get_db_admin),
+    admin: User = Depends(require_platform_admin),
 ):
     return db.query(Organization).all()
 
@@ -35,8 +35,8 @@ def list_organizations(
 @router.get("/organizations/{org_id}", response_model=OrganizationRead)
 def get_organization(
     org_id: UUID,
-    db: Session = Depends(get_db),
-    admin: User = Depends(require_admin),
+    db: Session = Depends(get_db_admin),
+    admin: User = Depends(require_platform_admin),
 ):
     org = db.query(Organization).filter(Organization.id == org_id).first()
     if not org:
@@ -52,8 +52,8 @@ def update_organization(
     org_id: UUID,
     payload: dict,
     request: Request,
-    db: Session = Depends(get_db),
-    admin: User = Depends(require_admin),
+    db: Session = Depends(get_db_admin),
+    admin: User = Depends(require_platform_admin),
 ):
     org = db.query(Organization).filter(Organization.id == org_id).first()
     if not org:
@@ -83,8 +83,8 @@ def update_organization(
 def delete_organization(
     org_id: UUID,
     request: Request,
-    db: Session = Depends(get_db),
-    admin: User = Depends(require_admin),
+    db: Session = Depends(get_db_admin),
+    admin: User = Depends(require_platform_admin),
 ):
     org = db.query(Organization).filter(Organization.id == org_id).first()
     if not org:
@@ -108,8 +108,8 @@ def delete_organization(
 
 @router.get("/stats")
 def get_platform_stats(
-    db: Session = Depends(get_db),
-    admin: User = Depends(require_admin),
+    db: Session = Depends(get_db_admin),
+    admin: User = Depends(require_platform_admin),
 ):
     return {
         "total_organizations": db.query(Organization).count(),
@@ -127,8 +127,8 @@ def get_platform_stats(
 
 @router.get("/system-config", response_model=list[dict])
 def list_system_config(
-    db: Session = Depends(get_db),
-    admin: User = Depends(require_admin),
+    db: Session = Depends(get_db_admin),
+    admin: User = Depends(require_platform_admin),
 ):
     from app.models import SystemConfig
     configs = db.query(SystemConfig).all()
@@ -140,8 +140,8 @@ def update_system_config(
     key: str,
     payload: dict,
     request: Request,
-    db: Session = Depends(get_db),
-    admin: User = Depends(require_admin),
+    db: Session = Depends(get_db_admin),
+    admin: User = Depends(require_platform_admin),
 ):
     from app.models import SystemConfig
     config = db.query(SystemConfig).filter(SystemConfig.key == key).first()
@@ -165,8 +165,8 @@ def update_system_config(
 def list_audit_logs(
     limit: int = 50,
     offset: int = 0,
-    db: Session = Depends(get_db),
-    admin: User = Depends(require_admin),
+    db: Session = Depends(get_db_admin),
+    admin: User = Depends(require_platform_admin),
 ):
     from app.models.audit_log import AuditLog
 
@@ -183,8 +183,8 @@ def list_audit_logs(
 def list_llm_usage(
     limit: int = 100,
     offset: int = 0,
-    db: Session = Depends(get_db),
-    admin: User = Depends(require_admin),
+    db: Session = Depends(get_db_admin),
+    admin: User = Depends(require_platform_admin),
 ):
     return (
         db.query(LLMUsage)
@@ -197,8 +197,8 @@ def list_llm_usage(
 
 @router.get("/health")
 def system_health(
-    db: Session = Depends(get_db),
-    admin: User = Depends(require_admin),
+    db: Session = Depends(get_db_admin),
+    admin: User = Depends(require_platform_admin),
 ):
     import redis
 

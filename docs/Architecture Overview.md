@@ -532,9 +532,48 @@ No organization should have access to:
 
 - Knowledge sources of other organizations. 
 
-- Analytics belonging to other organizations. 
+- Analytics belonging to other organizations.
 
-## Failure Handling Strategy 
+## Database-Level Row-Level Security (RLS)
+
+Scout.io implements defense-in-depth organization isolation at the database layer using PostgreSQL Row-Level Security (RLS). This provides an additional security layer beyond application-level query filtering.
+
+### RLS Implementation
+
+**Enabled Tables**: All 13 organization-scoped tables have RLS enabled:
+- `users`, `chatbots`, `policies`, `knowledge_sources`, `sessions`
+- `messages` (via session join), `api_keys`, `audit_logs`
+- `analytics_events`, `daily_analytics`, `llm_usage`, `webhooks`
+
+**Standard Isolation Policy**: Each table has an `org_isolation_policy` restricting all operations (SELECT, INSERT, UPDATE, DELETE) to rows where:
+```sql
+organization_id = current_setting('app.current_org_id')::uuid
+```
+
+**Messages Table**: Special policy joining through `sessions` table since messages don't have direct `organization_id`.
+
+**Platform Admin Bypass**: A separate `platform_admin_bypass` policy allows cross-org access when:
+```sql
+current_setting('app.is_platform_admin', true) = 'true'
+```
+This is narrowly scoped to admin endpoints only, not a global superuser bypass.
+
+### Request Lifecycle Integration
+
+1. **Authentication**: JWT access tokens include `org_id` claim (set at login/refresh)
+2. **Dependency Injection**: FastAPI dependency `get_db_with_org` extracts `org_id` from authenticated user
+3. **Session Variable**: At start of each request, `SET LOCAL app.current_org_id = :org_id` runs on the DB connection
+4. **Automatic Enforcement**: All subsequent queries on that connection automatically filtered by RLS
+5. **Admin Endpoints**: Use `get_db_admin` which sets `SET LOCAL app.is_platform_admin = 'true'` for cross-org queries
+
+### Security Guarantees
+
+- **Defense in Depth**: Even if application-level WHERE clauses are accidentally omitted, RLS blocks cross-org access
+- **Default Deny**: Without `app.current_org_id` set, queries return zero rows (RLS default deny)
+- **Write Protection**: `WITH CHECK` prevents INSERT/UPDATE/DELETE with wrong `organization_id`
+- **Audit Trail**: All cross-org access requires explicit platform_admin role and admin DB session
+
+## Failure Handling Strategy
 
 Scout.io adopts graceful degradation mechanisms. 
 
@@ -617,6 +656,8 @@ Its differentiating architectural components include:
 - Hybrid Deployment Architecture 
 
 - Configurable Behaviour Framework 
+
+- Database-Level Row-Level Security (RLS) 
 
 This architecture establishes the structural blueprint for Scout.io and defines the responsibilities, boundaries, and interactions of every major component. All subsequent documents must inherit and adhere to the architectural decisions specified herein. 
 

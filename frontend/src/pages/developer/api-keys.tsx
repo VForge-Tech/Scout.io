@@ -10,8 +10,14 @@ export default function ApiKeysPage() {
   const [newKey, setNewKey] = useState<any>(null);
   const [keyName, setKeyName] = useState('');
   const [message, setMessage] = useState('');
+  const [mounted, setMounted] = useState(false);
+
+  useEffect(() => {
+    setMounted(true);
+  }, []);
 
   const fetchKeys = async () => {
+    if (!mounted) return;
     try {
       setLoading(true);
       setError(null);
@@ -24,7 +30,7 @@ export default function ApiKeysPage() {
     }
   };
 
-  useEffect(() => { fetchKeys(); }, []);
+  useEffect(() => { if (mounted) fetchKeys(); }, [mounted]);
 
   const createKey = async () => {
     try {
