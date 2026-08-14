@@ -4,11 +4,13 @@ interface RequestOptions {
   method?: string;
   body?: unknown;
   headers?: Record<string, string>;
+  formData?: FormData;
 }
 
 async function request<T>(path: string, options: RequestOptions = {}): Promise<T> {
+  const isFormData = !!options.formData;
   const headers: Record<string, string> = {
-    'Content-Type': 'application/json',
+    ...(isFormData ? {} : { 'Content-Type': 'application/json' }),
     ...options.headers,
   };
 
@@ -22,7 +24,11 @@ async function request<T>(path: string, options: RequestOptions = {}): Promise<T
   const res = await fetch(`${API_BASE}${path}`, {
     method: options.method || 'GET',
     headers,
-    body: options.body ? JSON.stringify(options.body) : undefined,
+    body: options.formData
+      ? options.formData
+      : options.body
+        ? JSON.stringify(options.body)
+        : undefined,
   });
 
   if (!res.ok) {
@@ -48,6 +54,15 @@ export const api = {
   put: <T>(path: string, body?: unknown) => request<T>(path, { method: 'PUT', body }),
   patch: <T>(path: string, body?: unknown) => request<T>(path, { method: 'PATCH', body }),
   delete: <T>(path: string) => request<T>(path, { method: 'DELETE' }),
+  upload: <T>(path: string, file: File) => {
+    const form = new FormData();
+    form.append('file', file);
+    return request<T>(path, {
+      method: 'POST',
+      headers: {}, // do NOT set Content-Type; let the browser set the multipart boundary
+      formData: form,
+    });
+  },
 };
 
 // Helper for pages that need to fetch arrays with proper error handling

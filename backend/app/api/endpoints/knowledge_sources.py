@@ -1,9 +1,10 @@
 from uuid import UUID
 
-from fastapi import APIRouter, Depends, HTTPException, status
+from fastapi import APIRouter, Depends, HTTPException, Request, status
 from sqlalchemy.orm import Session
 
 from app.api.deps import get_current_user, get_db_with_org
+from app.core.config import get_settings
 from app.models import Chatbot, KnowledgeSource, User
 from app.schemas.knowledge_source import (
     KnowledgeSourceCreate,
@@ -155,3 +156,41 @@ def delete_knowledge_source(
     db.delete(source)
     db.commit()
     return None
+
+
+@router.post(
+    "/chatbots/{chatbot_id}/knowledge-sources/{source_id}/sync",
+    response_model=dict,
+)
+def sync_knowledge_source(
+    chatbot_id: UUID,
+    source_id: UUID,
+    request: Request,
+    db: Session = Depends(get_db_with_org),
+    user: User = Depends(get_current_user),
+):
+    """Trigger a re-sync of a knowledge source using the existing ingestion pipeline.
+
+    This dispatches the existing Celery ingestion task (process_knowledge_source),
+    which sets sync_status="processing" then "completed"/"failed" with retry support.
+    """
+    _get_chatbot(db, chatbot_id, user)
+    source = _get_source(db, source_id, user.organization_id)
+
+    if not get_settings().celery_enabled:
+        raise HTTPException(
+            status_code=status.HTTP_503_SERVICE_UNAVAILABLE,
+            detail="Celery ingestion is disabled; cannot trigger sync",
+        )
+
+    from app.tasks.embedding_tasks import process_knowledge_source
+
+    source.sync_status = "pending"
+    db.commit()
+
+    task = process_knowledge_source.delay(str(source.id))
+    return {
+        "status": "dispatched",
+        "source_id": str(source.id),
+        "task_id": task.id,
+    }

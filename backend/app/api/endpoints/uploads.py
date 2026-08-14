@@ -18,7 +18,17 @@ async def upload_file(
     file: UploadFile,
     user: User = Depends(get_current_user),
 ):
-    allowed_types = {"image/png", "image/jpeg", "image/gif", "application/pdf", "text/plain"}
+    allowed_types = {
+        "image/png",
+        "image/jpeg",
+        "image/gif",
+        "application/pdf",
+        "text/plain",
+        "text/markdown",
+        "text/x-markdown",
+        "application/vnd.openxmlformats-officedocument.wordprocessingml.document",
+        "application/msword",
+    }
     if file.content_type and file.content_type not in allowed_types:
         raise HTTPException(
             status_code=status.HTTP_400_BAD_REQUEST,

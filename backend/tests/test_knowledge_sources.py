@@ -91,3 +91,54 @@ def test_delete_knowledge_source(client: TestClient, db):
         headers=headers,
     )
     assert response.status_code == 204
+
+
+def test_sync_knowledge_source_dispatches_task(client: TestClient, db, monkeypatch):
+    from unittest.mock import MagicMock
+
+    headers = _auth_headers(client, db)
+    bot_id = _create_bot(client, headers)
+
+    create_resp = client.post(
+        f"/api/v1/chatbots/{bot_id}/knowledge-sources",
+        headers=headers,
+        json={"source_type": "website", "uri": "https://example.com"},
+    )
+    source_id = create_resp.json()["id"]
+
+    mock_task = MagicMock()
+    mock_task.id = "task-123"
+    mock_delay = MagicMock(return_value=mock_task)
+    monkeypatch.setattr(
+        "app.tasks.embedding_tasks.process_knowledge_source.delay", mock_delay
+    )
+
+    response = client.post(
+        f"/api/v1/chatbots/{bot_id}/knowledge-sources/{source_id}/sync",
+        headers=headers,
+    )
+    assert response.status_code == 200
+    data = response.json()
+    assert data["status"] == "dispatched"
+    assert data["source_id"] == source_id
+    assert data["task_id"] == "task-123"
+    mock_delay.assert_called_once_with(source_id)
+
+
+def test_sync_knowledge_source_requires_ownership(client: TestClient, db):
+    headers = _auth_headers(client, db)
+    bot_id = _create_bot(client, headers)
+
+    resp = client.post(
+        f"/api/v1/chatbots/{bot_id}/knowledge-sources",
+        headers=headers,
+        json={"source_type": "website", "uri": "https://example.com"},
+    )
+    source_id = resp.json()["id"]
+
+    random_bot = str(uuid.uuid4())
+    response = client.post(
+        f"/api/v1/chatbots/{random_bot}/knowledge-sources/{source_id}/sync",
+        headers=headers,
+    )
+    assert response.status_code == 404
