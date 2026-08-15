@@ -1,6 +1,7 @@
+from datetime import date
 from uuid import UUID
 
-from fastapi import APIRouter, Depends, HTTPException, status
+from fastapi import APIRouter, Depends, HTTPException, Query, status
 from sqlalchemy import func
 from sqlalchemy.orm import Session
 
@@ -18,6 +19,7 @@ from app.models import (
 )
 from app.schemas.analytics import (
     ChatbotAnalyticsResponse,
+    DailyAnalyticsRead,
     OrgAnalyticsResponse,
     PlatformAnalyticsResponse,
     SourceAnalyticsResponse,
@@ -150,6 +152,70 @@ def get_org_analytics(
         total_chatbots=total_chatbots,
         active_chatbots=active_chatbots,
     )
+
+
+def _apply_date_range(query, start_date: date | None, end_date: date | None):
+    if start_date:
+        query = query.filter(DailyAnalytics.date >= start_date)
+    if end_date:
+        query = query.filter(DailyAnalytics.date <= end_date)
+    return query
+
+
+@router.get("/analytics/organization/daily", response_model=list[DailyAnalyticsRead])
+def get_org_daily_analytics(
+    start_date: date | None = Query(None, description="Inclusive start date (YYYY-MM-DD)"),
+    end_date: date | None = Query(None, description="Inclusive end date (YYYY-MM-DD)"),
+    db: Session = Depends(get_db_with_org),
+    user: User = Depends(get_current_user),
+):
+    """Daily time-series analytics for the current organization.
+
+    Rows are scoped to the current user's organization via RLS and an explicit
+    organization_id filter. This endpoint only ever returns the caller's own
+    organization data.
+    """
+    query = db.query(DailyAnalytics).filter(
+        DailyAnalytics.organization_id == user.organization_id,
+        DailyAnalytics.chatbot_id.isnot(None),
+    )
+    query = _apply_date_range(query, start_date, end_date)
+    return query.order_by(DailyAnalytics.date).all()
+
+
+@router.get("/analytics/chatbot/{chatbot_id}/daily", response_model=list[DailyAnalyticsRead])
+def get_chatbot_daily_analytics(
+    chatbot_id: UUID,
+    start_date: date | None = Query(None, description="Inclusive start date (YYYY-MM-DD)"),
+    end_date: date | None = Query(None, description="Inclusive end date (YYYY-MM-DD)"),
+    db: Session = Depends(get_db_with_org),
+    user: User = Depends(get_current_user),
+):
+    """Daily time-series analytics for a single chatbot.
+
+    The chatbot is validated to belong to the current user's organization before
+    any rows are returned, so cross-organization access is impossible.
+    """
+    chatbot = (
+        db.query(Chatbot)
+        .filter(
+            Chatbot.id == chatbot_id,
+            Chatbot.organization_id == user.organization_id,
+        )
+        .first()
+    )
+    if not chatbot:
+        raise HTTPException(
+            status_code=status.HTTP_404_NOT_FOUND,
+            detail="Chatbot not found",
+        )
+
+    query = db.query(DailyAnalytics).filter(
+        DailyAnalytics.organization_id == user.organization_id,
+        DailyAnalytics.chatbot_id == chatbot_id,
+    )
+    query = _apply_date_range(query, start_date, end_date)
+    return query.order_by(DailyAnalytics.date).all()
 
 
 @router.get("/analytics/source/{source_id}", response_model=SourceAnalyticsResponse)

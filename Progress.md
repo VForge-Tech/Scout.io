@@ -199,6 +199,34 @@
   - After fixes: 22/22 passed (100%) — all adversarial tests now pass
 - **Total test suite**: 114 tests passing (92 original + 22 security), 8 skipped (PostgreSQL-only RLS)
 
+### Sprint 12: Tenant Dashboard (Chatbots, Knowledge Sources, Analytics) [COMPLETED]
+- **Dashboard layout** (`frontend/src/components/DashboardLayout.tsx`): top nav + sidebar shared by all tenant pages under `/dashboard/`
+- **Overview** (`/dashboard`): Live org info (`GET /organizations/me`) + org analytics (`GET /analytics/organization`), stat cards, quick actions
+- **Settings** (`/dashboard/settings`): Organization rename via `PUT /organizations/me`
+- **Chatbot management** (`/dashboard/chatbots`, `/chatbots/new`, `/chatbots/[id]`):
+  - Create, rename, delete with confirmation modal
+  - Model tier picker (fast/balanced/accurate) mapped to backend behaviour config
+  - Knowledge source attach/detach per chatbot
+  - Real policy form: source_filter → `allowed_source_ids`, content_filter → `blocked_terms`
+  - Widget snippet preview + copy reusing `GET /developer/widget-snippet?theme=light|dark`
+- **Knowledge sources** (`/dashboard/knowledge-sources`):
+  - Aggregated list across all org chatbots with 5s polling (no websocket exists)
+  - Add Source flow: website URL, file upload (PDF/Markdown/DOCX/TXT via `/uploads/{chatbot_id}`), and SQL/API/Git connectors with exact backend fields
+  - Sync status badges (Synced/Failed/Syncing/Pending), retry button, delete confirmation warning it removes the source from every chatbot using it
+  - Backend: new `POST /chatbots/{chatbot_id}/knowledge-sources/{source_id}/sync` dispatch endpoint (503 if Celery disabled); uploads `allowed_types` broadened for Markdown/DOCX/TXT
+  - `frontend/src/lib/api.ts` rewritten: multipart `formData` support + `api.upload<T>()`
+- **Analytics** (`/dashboard/analytics`): recharts page (installed; was not previously a dependency)
+  - Date-range selector (7/30/90 days), message volume + sessions over time (composed chart)
+  - Token usage over time broken out per chatbot (shown only when >1 chatbot)
+  - Feedback summary card; latency/feedback fields exposed via daily endpoint
+  - Admin-only knowledge source usage table (`GET /analytics/source/{source_id}`) gated on role from new `GET /auth/me`
+  - Backend time-series endpoints (all org-scoped):
+    - `GET /analytics/organization/daily?start_date&end_date` — daily rows for the caller's org
+    - `GET /analytics/chatbot/{chatbot_id}/daily` — 404 unless chatbot belongs to caller's org
+  - `GET /auth/me` added (referenced in developer docs but previously missing)
+- **Cross-org isolation verified**: analytics tests confirm org A cannot read org B's daily or aggregate analytics (404), plus `/auth/me` test
+- **Total test suite**: 124 passing (114 + 10 analytics/auth tests), 8 skipped (PostgreSQL-only RLS)
+
 ---
 
 ## Phase V: In Progress / Planned
@@ -206,7 +234,7 @@
 - Advanced cost tracking and budget alerts per organization/chatbot
 - Performance optimization: incremental sync, intelligent caching improvements
 - SDK generation for Python, JavaScript, Go (Python/JS done)
-- Real-time analytics dashboard with charts (WebSocket-based)
+- Real-time analytics dashboard updates (WebSocket-based; static/date-range charts done in Sprint 12)
 - Custom model fine-tuning integration
 - Multi-region deployment support
 - Horizontal scaling for Celery workers

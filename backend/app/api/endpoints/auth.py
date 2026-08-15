@@ -3,7 +3,7 @@ from uuid import UUID
 from fastapi import APIRouter, Depends, HTTPException, Request, status
 from sqlalchemy.orm import Session
 
-from app.api.deps import get_db
+from app.api.deps import get_current_user, get_db
 from app.core.security import (
     create_access_token,
     create_refresh_token,
@@ -16,6 +16,18 @@ from app.schemas.auth import LoginRequest, RefreshRequest, TokenResponse
 from app.utils.audit import create_audit_log
 
 router = APIRouter(prefix="/auth", tags=["auth"])
+
+
+@router.get("/me")
+def get_me(user: User = Depends(get_current_user)):
+    return {
+        "id": user.id,
+        "email": user.email,
+        "full_name": user.full_name,
+        "role": user.role,
+        "organization_id": user.organization_id,
+        "is_active": user.is_active,
+    }
 
 
 @router.post("/login", response_model=TokenResponse)
