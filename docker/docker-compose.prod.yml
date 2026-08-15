@@ -83,11 +83,50 @@ services:
           cpus: '1'
           memory: 2G
 
+  celery_billing_worker:
+    build:
+      context: ../backend
+      dockerfile: Dockerfile
+    command: celery -A app.tasks.billing_tasks.celery_app worker --loglevel=info
+    env_file:
+      - ../backend/.env
+    environment:
+      - VAULT_ADDR=http://vault:8200
+      - VAULT_TOKEN=${VAULT_TOKEN}
+    depends_on:
+      - redis
+      - postgres
+      - vault
+        condition: service_healthy
+    restart: always
+    deploy:
+      resources:
+        limits:
+          cpus: '1'
+          memory: 2G
+
   celery_beat:
     build:
       context: ../backend
       dockerfile: Dockerfile
     command: celery -A app.tasks.analytics_tasks.celery_app beat --loglevel=info
+    env_file:
+      - ../backend/.env
+    environment:
+      - VAULT_ADDR=http://vault:8200
+      - VAULT_TOKEN=${VAULT_TOKEN}
+    depends_on:
+      - redis
+      - postgres
+      - vault
+        condition: service_healthy
+    restart: always
+
+  celery_billing_beat:
+    build:
+      context: ../backend
+      dockerfile: Dockerfile
+    command: celery -A app.tasks.billing_tasks.celery_app beat --loglevel=info
     env_file:
       - ../backend/.env
     environment:

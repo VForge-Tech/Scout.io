@@ -14,7 +14,14 @@ from sqlalchemy.orm import Session
 
 from app.core.billing.plans import PLANS, PlanTier, get_plan
 from app.core.config import get_settings
-from app.models import ChatSession, Chatbot, KnowledgeSource, Message, Organization
+from app.models import (
+    AnalyticsEvent,
+    ChatSession,
+    Chatbot,
+    KnowledgeSource,
+    Message,
+    Organization,
+)
 
 
 def _current_month_start() -> datetime:
@@ -139,6 +146,43 @@ def usage_summary(db: Session, org: Organization) -> dict:
         .scalar()
         or 0
     )
+
+    # Usage-based component: token usage + overage from the latest billing record,
+    # plus any soft-limit warning fired by the billing beat task.
+    from app.models import UsageBillingRecord
+
+    month_key = _current_month_start().strftime("%Y-%m")
+    billing_record = (
+        db.query(UsageBillingRecord)
+        .filter(
+            UsageBillingRecord.organization_id == org.id,
+            UsageBillingRecord.period == month_key,
+        )
+        .first()
+    )
+    warning = None
+    if plan.included_monthly_tokens > 0:
+        recent_event = (
+            db.query(AnalyticsEvent)
+            .filter(
+                AnalyticsEvent.organization_id == org.id,
+                AnalyticsEvent.event_type == "billing.usage_soft_limit",
+            )
+            .order_by(AnalyticsEvent.timestamp.desc())
+            .first()
+        )
+        if recent_event and (recent_event.payload or {}).get("period") == month_key:
+            payload = recent_event.payload or {}
+            warning = {
+                "type": "usage_soft_limit",
+                "message": (
+                    f"You've used {payload.get('total_tokens', 0):,} of "
+                    f"{plan.included_monthly_tokens:,} included tokens this month "
+                    f"({int((payload.get('ratio', 0) or 0) * 100)}%). Usage-based "
+                    "overage charges will apply if you exceed the included amount."
+                ),
+            }
+
     return {
         "billing_enabled": billing_enabled(),
         "plan": plan.key,
@@ -148,12 +192,28 @@ def usage_summary(db: Session, org: Organization) -> dict:
             "chatbots": plan.chatbot_limit,
             "monthly_messages": plan.monthly_message_limit,
             "knowledge_sources": plan.knowledge_source_limit,
+            "included_monthly_tokens": plan.included_monthly_tokens,
         },
         "usage": {
             "chatbots": chatbot_count,
             "monthly_messages": message_count,
             "knowledge_sources": source_count,
         },
+        "usage_billing": (
+            {
+                "period": billing_record.period,
+                "total_tokens": billing_record.total_tokens,
+                "prompt_tokens": billing_record.prompt_tokens,
+                "completion_tokens": billing_record.completion_tokens,
+                "estimated_cost": billing_record.estimated_cost,
+                "overage_tokens": billing_record.overage_tokens,
+                "overage_cost": billing_record.overage_cost,
+                "reported_to_razorpay": billing_record.reported_to_razorpay,
+            }
+            if billing_record
+            else None
+        ),
+        "warning": warning,
         "available_plans": [
             {
                 "key": p.key,
@@ -165,6 +225,7 @@ def usage_summary(db: Session, org: Organization) -> dict:
                     "chatbots": p.chatbot_limit,
                     "monthly_messages": p.monthly_message_limit,
                     "knowledge_sources": p.knowledge_source_limit,
+                    "included_monthly_tokens": p.included_monthly_tokens,
                 },
             }
             for p in PLANS.values()

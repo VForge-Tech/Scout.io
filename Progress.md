@@ -243,11 +243,26 @@
 - **Tests**: 20 billing tests (checkout-session, signature rejection, all four webhook events, plan limit enforcement for chatbots/knowledge sources/messages, cancelled-downgrade, usage summary, disabled-flag 503 behavior)
 - **Total test suite**: 145 passing (142 + 3 flag tests), 8 skipped (PostgreSQL-only RLS)
 
+### Sprint 14: Usage-Based Billing (Token Overage via Celery Beat) [COMPLETED]
+- **LLMUsage now actually written**: `ResponsePipeline` records an `LLMUsage` row after every AI generation (was previously never written — only read by analytics/admin). `AIRouter` captures provider-reported token counts (fallback to `count_tokens` estimate) + the model actually used (incl. fallback chain); estimated cost stored via new `pricing.py`
+- **Pricing module** (`backend/app/core/billing/pricing.py`): per-model paise-per-1K input/output prices (`gpt-3.5-turbo`, `gpt-4o-mini`, `gpt-4o`, Claude, Gemini, Llama) with a medium default; `estimate_cost_paise`, `overage_amount_paise`, add-on batch cap (`MAX_OVERAGE_TOKENS_PER_ADDON`)
+- **Plan usage component** (`plans.py`): each tier gains `included_monthly_tokens` (Free 100k / Starter 1M / Growth 5M / Scale 25M) and `overage_price_paise_per_1k` for paid tiers
+- **`UsageBillingRecord` model + migration 0008**: unique per `organization_id` + `YYYY-MM` period; stores prompt/completion/total tokens, estimated cost (paise), overage tokens/cost, `reported_to_razorpay`, `razorpay_addon_id`
+- **Celery beat task** (`backend/app/tasks/billing_tasks.py`, 03:00 UTC daily): per-org month aggregation, `UsageBillingRecord` upsert, Razorpay overage reporting, 80% soft-limit event, idempotent re-runs
+- **Razorpay overage reporting** (`razorpay_client.create_addon`): Razorpay has no usage-metering API, so overage is charged as a subscription **add-on** on the next invoice (`subscription.createAddon`, verified against the SDK); graceful **fallback to internal tracking** (`reported_to_razorpay=false`) when there's no subscription, no overage price, or the API call fails
+- **Soft-limit warning**: `billing.usage_soft_limit` AnalyticsEvent fired once per period at 80% of included tokens; surfaced by `usage_summary` (`warning`) and rendered as an orange banner on `/dashboard/billing`
+- **Billing endpoint**: `GET /organizations/me/billing` now returns `usage_billing` (current month record) and `limits.included_monthly_tokens`
+- **Frontend** (`/dashboard/billing`): warning banner, token usage card (used / included, overage + add-on vs invoice status)
+- **Infra**: `celery_billing_beat` + `celery_billing_worker` compose services; worker app includes both `billing_tasks` and `analytics_tasks`
+- **Docs**: `docs/Plans and Billing.md` — usage-based billing section (recording, aggregation, overage fallback, deployment)
+- **Tests**: 16 new tests (pricing math + model matching, aggregation create/upsert, Razorpay add-on report + failure fallback + no-subscription skip, soft-limit once-per-period + below-threshold, endpoint warning/usage_billing surface, pipeline LLMUsage recording incl. provider-usage capture, no-db skip)
+- **Total test suite**: 161 passing (145 + 16), 8 skipped (PostgreSQL-only RLS) — frontend build clean
+
 ---
 
 ## Phase V: In Progress / Planned
 - Multi-factor authentication (TOTP-based)
-- Advanced cost tracking and budget alerts per organization/chatbot (plan tiers/billing done in Sprint 13; feature-flagged)
+- Advanced cost tracking and budget alerts per organization/chatbot (plan tiers/billing + usage-based overage done in Sprints 13–14; feature-flagged)
 - Performance optimization: incremental sync, intelligent caching improvements
 - SDK generation for Python, JavaScript, Go (Python/JS done)
 - Real-time analytics dashboard updates (WebSocket-based; static/date-range charts done in Sprint 12)

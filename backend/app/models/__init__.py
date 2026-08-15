@@ -10,6 +10,7 @@ from .message import Message
 from .organization import Organization
 from .policy import Policy
 from .system_config import SystemConfig
+from .usage_billing_record import UsageBillingRecord
 from .user import User
 from .webhook import Webhook
 
@@ -26,6 +27,7 @@ __all__ = [
     "Organization",
     "Policy",
     "SystemConfig",
+    "UsageBillingRecord",
     "User",
     "Webhook",
 ]

@@ -128,3 +128,38 @@ def cancel_subscription(subscription_id: str) -> dict:
     except Exception as e:
         logger.exception("Razorpay subscription.cancel failed")
         raise RazorpayError(f"Failed to cancel Razorpay subscription: {e}") from e
+
+
+def create_addon(
+    subscription_id: str,
+    name: str,
+    amount_paise: int,
+    description: str | None = None,
+    notes: dict | None = None,
+) -> dict:
+    """Charge a one-off add-on against a subscription (next invoice).
+
+    Razorpay has no native usage-metering API, so we report token overage as an
+    add-on on the upcoming invoice. ``amount_paise`` must be a positive integer
+    amount in the subscription's currency (paise for INR).
+    """
+    client = get_client()
+    item = {
+        "name": name,
+        "amount": int(amount_paise),
+        "currency": "INR",
+        "description": description,
+    }
+    if notes:
+        item["notes"] = notes
+    try:
+        return client.subscription.createAddon(
+            subscription_id,
+            {
+                "item": item,
+                "quantity": 1,
+            },
+        )
+    except Exception as e:
+        logger.exception("Razorpay subscription.createAddon failed")
+        raise RazorpayError(f"Failed to create Razorpay add-on: {e}") from e

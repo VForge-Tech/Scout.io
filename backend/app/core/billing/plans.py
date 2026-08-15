@@ -19,6 +19,10 @@ class PlanTier:
     description: str
     razorpay_plan_id: str = ""
     features: list[str] = field(default_factory=list)
+    # Usage-based component: tokens included each month and the per-1K-token
+    # overage price in paise (used by the billing beat task).
+    included_monthly_tokens: int = 0
+    overage_price_paise_per_1k: int = 0
 
 
 PLANS: dict[str, PlanTier] = {
@@ -31,6 +35,7 @@ PLANS: dict[str, PlanTier] = {
         knowledge_source_limit=5,
         description="For individuals exploring Scout.io.",
         features=["1 chatbot", "1,000 messages / month", "5 knowledge sources"],
+        included_monthly_tokens=100_000,
     ),
     "starter": PlanTier(
         key="starter",
@@ -42,6 +47,8 @@ PLANS: dict[str, PlanTier] = {
         description="For small teams getting started with AI knowledge bases.",
         razorpay_plan_id="plan_starter",
         features=["3 chatbots", "10,000 messages / month", "20 knowledge sources"],
+        included_monthly_tokens=1_000_000,
+        overage_price_paise_per_1k=40,
     ),
     "growth": PlanTier(
         key="growth",
@@ -53,6 +60,8 @@ PLANS: dict[str, PlanTier] = {
         description="For growing teams with active production chatbots.",
         razorpay_plan_id="plan_growth",
         features=["10 chatbots", "100,000 messages / month", "100 knowledge sources"],
+        included_monthly_tokens=5_000_000,
+        overage_price_paise_per_1k=30,
     ),
     "scale": PlanTier(
         key="scale",
@@ -64,6 +73,8 @@ PLANS: dict[str, PlanTier] = {
         description="For large organizations at high volume.",
         razorpay_plan_id="plan_scale",
         features=["50 chatbots", "1,000,000 messages / month", "500 knowledge sources"],
+        included_monthly_tokens=25_000_000,
+        overage_price_paise_per_1k=20,
     ),
 }
 

@@ -5,6 +5,7 @@ from uuid import UUID
 from sqlalchemy.orm import Session
 
 from app.core.ai.router import AIRouter
+from app.core.billing.pricing import estimate_cost_paise
 from app.core.config import get_settings
 from app.core.knowledge.engine import KnowledgeEngine
 from app.core.memory.knowledge_memory import KnowledgeMemory
@@ -89,6 +90,42 @@ class ResponsePipeline:
 
         return True, None
 
+    def _record_usage(
+        self, db: Session | None, org_id: str, chatbot_id: str | None
+    ) -> None:
+        """Persist an LLMUsage row for the most recent generation.
+
+        Uses the token counts and model captured by AIRouter (provider-reported
+        when available, estimated otherwise). This is the only place LLMUsage is
+        written; the billing beat task aggregates it for usage-based billing.
+        """
+        usage = getattr(self.ai, "last_usage", None)
+        if not db or not usage:
+            return
+        from uuid import UUID
+
+        from app.models import LLMUsage
+
+        model = usage.get("model") or self.ai.primary_model
+        prompt_tokens = usage.get("prompt_tokens") or 0
+        completion_tokens = usage.get("completion_tokens") or 0
+        try:
+            org_uuid = UUID(str(org_id))
+            chatbot_uuid = UUID(str(chatbot_id)) if chatbot_id else None
+        except ValueError:
+            return
+        db.add(
+            LLMUsage(
+                organization_id=org_uuid,
+                chatbot_id=chatbot_uuid,
+                model=model,
+                prompt_tokens=prompt_tokens,
+                completion_tokens=completion_tokens,
+                total_tokens=prompt_tokens + completion_tokens,
+                cost=estimate_cost_paise(model, prompt_tokens, completion_tokens),
+            )
+        )
+
     def run(
         self,
         query: str,
@@ -133,6 +170,7 @@ class ResponsePipeline:
         self.session_memory.add_message(session_id, "user", query)
 
         reply = self.ai.generate(messages)
+        self._record_usage(db, org_id_str, chatbot_id_str)
 
         is_valid, issues = self.validator.validate_against_context(
             reply, retrieved_chunks
@@ -145,6 +183,7 @@ class ResponsePipeline:
                 {"role": "user", "content": query},
             ]
             reply = self.ai.generate(messages_no_context)
+            self._record_usage(db, org_id_str, chatbot_id_str)
 
         is_safe, safety_issue = self.validator.validate_safety(reply)
         if not is_safe:

@@ -12,7 +12,19 @@ interface PlanInfo {
     chatbots: number;
     monthly_messages: number;
     knowledge_sources: number;
+    included_monthly_tokens?: number;
   };
+}
+
+interface UsageBilling {
+  period: string;
+  total_tokens: number;
+  prompt_tokens: number;
+  completion_tokens: number;
+  estimated_cost: number;
+  overage_tokens: number;
+  overage_cost: number;
+  reported_to_razorpay: boolean;
 }
 
 interface BillingInfo {
@@ -24,12 +36,15 @@ interface BillingInfo {
     chatbots: number;
     monthly_messages: number;
     knowledge_sources: number;
+    included_monthly_tokens: number;
   };
   usage: {
     chatbots: number;
     monthly_messages: number;
     knowledge_sources: number;
   };
+  usage_billing: UsageBilling | null;
+  warning: { type: string; message: string } | null;
   available_plans: PlanInfo[];
 }
 
@@ -128,6 +143,13 @@ export default function DashboardBilling() {
         </div>
       )}
 
+      {!loading && billing && billing.warning && (
+        <div className="bg-orange-50 text-orange-800 border border-orange-200 px-4 py-4 rounded mb-6">
+          <p className="font-medium">Usage warning</p>
+          <p className="text-sm mt-1">{billing.warning.message}</p>
+        </div>
+      )}
+
       {!loading && billing && (
         <>
           <div className="grid grid-cols-1 md:grid-cols-3 gap-4 mb-6">
@@ -152,6 +174,23 @@ export default function DashboardBilling() {
                 <span className="text-gray-400 text-base font-normal"> / {billing.limits.knowledge_sources}</span>
               </p>
             </div>
+            {billing.usage_billing && (
+              <div className="bg-white rounded-lg shadow p-5">
+                <p className="text-sm text-gray-500">Tokens used (month)</p>
+                <p className="text-2xl font-bold text-gray-900 mt-1">
+                  {formatNum(billing.usage_billing.total_tokens)}
+                  <span className="text-gray-400 text-base font-normal"> / {formatNum(billing.limits.included_monthly_tokens)}</span>
+                </p>
+                {billing.usage_billing.overage_tokens > 0 && (
+                  <p className="text-xs text-red-600 mt-1">
+                    {formatNum(billing.usage_billing.overage_tokens)} over included limit
+                    {billing.usage_billing.reported_to_razorpay
+                      ? ' — billed as add-on'
+                      : ' — will be invoiced'}
+                  </p>
+                )}
+              </div>
+            )}
           </div>
 
           {actionError && <div className="bg-red-50 text-red-700 px-4 py-3 rounded mb-6">{actionError}</div>}
