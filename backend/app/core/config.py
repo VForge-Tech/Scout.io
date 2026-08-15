@@ -67,6 +67,11 @@ class Settings(BaseSettings):
     litellm_enabled: bool = True
     celery_enabled: bool = True
 
+    # Load-test mode: replace LLM/embedding provider calls with deterministic
+    # canned responses so load tests exercise the full pipeline without real
+    # API cost / rate limits. Enable with MOCK_LLM=true (never in production).
+    mock_llm: bool = False
+
     # Optional pgvector fallback
     pgvector_enabled: bool = False
 

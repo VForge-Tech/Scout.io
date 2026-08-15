@@ -1,11 +1,13 @@
 from uuid import UUID
 
-from fastapi import APIRouter, Depends, HTTPException, Request, status
+from fastapi import APIRouter, Depends, HTTPException, Request, Response, status
 from sqlalchemy.orm import Session
 
 from app.api.deps import get_db, optional_current_user
 from app.core.billing.limits import assert_message_quota
+from app.core.config import get_settings
 from app.core.pipeline.response_pipeline import ResponsePipeline
+from app.core.rate_limit import limiter, widget_org_key
 from app.core.security import create_access_token, decode_token
 from app.db.session import get_db as get_db_base
 from app.models import ChatSession as SessionModel
@@ -101,9 +103,11 @@ def create_widget_session(
 
 
 @router.post("/messages", response_model=WidgetMessageResponse)
+@limiter.limit(lambda: get_settings().rate_limit_per_org, key_func=widget_org_key)
 def send_widget_message(
     payload: WidgetMessageRequest,
     request: Request,
+    response: Response,
     db: Session = Depends(get_db),
     session: SessionModel = Depends(get_widget_session),
 ):
@@ -141,6 +145,14 @@ def send_widget_message(
         db=db,
         policies=policies,
     )
+
+    # Expose per-stage pipeline timing (ms) to load-test clients via a header.
+    # Load tests read this to build p50/p95/p99 per stage without touching the API schema.
+    timings = result.get("timings")
+    if timings:
+        import json
+
+        response.headers["X-Pipeline-Timings"] = json.dumps(timings)
 
     bot_msg = Message(
         session_id=session.id,

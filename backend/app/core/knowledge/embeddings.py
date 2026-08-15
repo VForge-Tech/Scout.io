@@ -14,6 +14,8 @@ class EmbeddingService:
         self.dimensions = dimensions or settings.embedding_dimension
 
     def embed_text(self, text: str) -> list[float]:
+        if settings.mock_llm:
+            return self._mock_embed(text)
         response = litellm_embedding(
             model=self.model,
             input=[text],
@@ -24,6 +26,8 @@ class EmbeddingService:
     def embed_texts(self, texts: list[str]) -> list[list[float]]:
         if not texts:
             return []
+        if settings.mock_llm:
+            return [self._mock_embed(t) for t in texts]
         response = litellm_embedding(
             model=self.model,
             input=texts,
@@ -33,6 +37,20 @@ class EmbeddingService:
 
     def embed_query(self, query: str) -> list[float]:
         return self.embed_text(query)
+
+    def _mock_embed(self, text: str) -> list[float]:
+        """Deterministic pseudo-embedding for MOCK_LLM load-test mode.
+
+        A hash-derived unit vector of the configured dimension. Qdrant cosine
+        search still ranks (deterministically) without a real provider call.
+        """
+        import hashlib
+
+        digest = hashlib.sha256(text.encode("utf-8")).digest()
+        seed = int.from_bytes(digest[:8], "big")
+        values = [((seed >> i) & 0xFFFF) / 65535.0 * 2.0 - 1.0 for i in range(self.dimensions)]
+        norm = sum(v * v for v in values) ** 0.5 or 1.0
+        return [v / norm for v in values]
 
 
 @lru_cache

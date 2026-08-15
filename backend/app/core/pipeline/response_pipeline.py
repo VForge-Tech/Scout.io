@@ -1,5 +1,6 @@
 import logging
 import re
+import time
 from uuid import UUID
 
 from sqlalchemy.orm import Session
@@ -139,39 +140,59 @@ class ResponsePipeline:
         org_id_str = str(organization_id)
         chatbot_id_str = str(chatbot_id) if chatbot_id else None
 
-        cached = self.opt_memory.get_cached_response(query, org_id_str)
-        if cached:
-            return {"reply": cached, "cached": True, "session_id": session_id}
+        timings: dict[str, float] = {}
 
+        _t0 = time.perf_counter()
+        cached = self.opt_memory.get_cached_response(query, org_id_str)
+        timings["cache_lookup"] = (time.perf_counter() - _t0) * 1000
+        if cached:
+            return {"reply": cached, "cached": True, "session_id": session_id, "timings": timings}
+
+        _t0 = time.perf_counter()
         retrieved_chunks = self.knowledge_memory.get_cached_chunks(
             query, org_id_str, chatbot_id_str
         )
+        timings["knowledge_cache_lookup"] = (time.perf_counter() - _t0) * 1000
 
         if retrieved_chunks is None:
+            _t0 = time.perf_counter()
             retrieved_chunks = self.knowledge.retrieve(
                 query=query,
                 organization_id=org_id_str,
                 chatbot_id=chatbot_id_str,
                 policies=policies,
             )
+            timings["retrieval"] = (time.perf_counter() - _t0) * 1000
+            _t0 = time.perf_counter()
             self.knowledge_memory.cache_chunks(
                 query, org_id_str, retrieved_chunks, chatbot_id_str
             )
+            timings["knowledge_cache_write"] = (time.perf_counter() - _t0) * 1000
+        else:
+            timings["retrieval"] = 0.0
+            timings["knowledge_cache_write"] = 0.0
 
+        _t0 = time.perf_counter()
         context = "\n\n".join(
             f"[Source {i+1}] (relevance: {r['score']:.3f})\n{r['text']}"
             for i, r in enumerate(retrieved_chunks)
         )
 
         context = self.token_optimizer.compress_context(context, query)
+        timings["context_build"] = (time.perf_counter() - _t0) * 1000
 
+        _t0 = time.perf_counter()
         messages = self.session_memory.build_context(session_id, context)
 
         self.session_memory.add_message(session_id, "user", query)
+        timings["session_memory"] = (time.perf_counter() - _t0) * 1000
 
+        _t0 = time.perf_counter()
         reply = self.ai.generate(messages)
+        timings["llm_generate"] = (time.perf_counter() - _t0) * 1000
         self._record_usage(db, org_id_str, chatbot_id_str)
 
+        _t0 = time.perf_counter()
         is_valid, issues = self.validator.validate_against_context(
             reply, retrieved_chunks
         )
@@ -184,7 +205,9 @@ class ResponsePipeline:
             ]
             reply = self.ai.generate(messages_no_context)
             self._record_usage(db, org_id_str, chatbot_id_str)
+        timings["validation"] = (time.perf_counter() - _t0) * 1000
 
+        _t0 = time.perf_counter()
         is_safe, safety_issue = self.validator.validate_safety(reply)
         if not is_safe:
             reply = "I apologize, but I cannot provide that response."
@@ -194,11 +217,15 @@ class ResponsePipeline:
         if not post_safe:
             logger.warning("Post-generation safety check failed: %s", post_issue)
             reply = "I apologize, but I cannot provide that response."
+        timings["safety"] = (time.perf_counter() - _t0) * 1000
 
+        _t0 = time.perf_counter()
         reply = self.sanitizer.sanitize(reply)
 
         self.session_memory.add_message(session_id, "assistant", reply)
 
         self.opt_memory.cache_response(query, org_id_str, reply)
+        timings["postprocess"] = (time.perf_counter() - _t0) * 1000
 
-        return {"reply": reply, "cached": False, "session_id": session_id}
+        timings["total"] = sum(v for v in timings.values())
+        return {"reply": reply, "cached": False, "session_id": session_id, "timings": timings}

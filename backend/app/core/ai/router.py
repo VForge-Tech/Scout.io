@@ -29,6 +29,11 @@ class AIRouter:
         stream: bool = False,
     ) -> str:
         self.last_usage = None
+
+        # Load-test mode: deterministic canned reply, no provider call.
+        if settings.mock_llm:
+            return self._mock_generate(messages, max_tokens)
+
         fallback_models = get_fallback_chain(self.primary_model)
 
         for model in fallback_models:
@@ -57,6 +62,30 @@ class AIRouter:
                 continue
 
         return self._graceful_error_response()
+
+    def _mock_generate(self, messages: list[dict], max_tokens: int | None) -> str:
+        """Deterministic canned reply for MOCK_LLM load-test mode.
+
+        Mirrors the shapes the real provider returns (token usage captured on
+        self.last_usage) so downstream billing/validation code paths still run.
+        Adds a small fixed latency (~120ms) to keep the pipeline representative.
+        """
+        import time
+
+        time.sleep(0.12)
+        user_content = next(
+            (m.get("content", "") for m in reversed(messages) if m.get("role") == "user"),
+            "",
+        )
+        reply = f"[mock] Load-test reply for: {user_content[:120]}"
+        prompt_text = "".join(m.get("content") or "" for m in messages)
+        self.last_usage = {
+            "model": self.primary_model,
+            "prompt_tokens": self.count_tokens(prompt_text),
+            "completion_tokens": self.count_tokens(reply),
+            "total_tokens": self.count_tokens(prompt_text) + self.count_tokens(reply),
+        }
+        return reply
 
     def _capture_usage(
         self, model: str, messages: list[dict], content: str, response=None

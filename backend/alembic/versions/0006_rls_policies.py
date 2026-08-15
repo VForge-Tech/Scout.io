@@ -115,8 +115,12 @@ def upgrade() -> None:
     # Create the custom GUCs if they don't exist (they're session-scoped, so just document here)
     # In practice, these are set via SET LOCAL in the application code.
 
-    # Enable RLS and create policies for all org-scoped tables
+    # Enable RLS and create policies for all org-scoped tables. Messages is
+    # excluded here because it has no organization_id column (it joins through
+    # sessions); it is handled separately below.
     for table in ORG_SCOPED_TABLES:
+        if table == "messages":
+            continue
         _enable_rls(table)
         _create_org_policy(table)
         _create_admin_bypass_policy(table)

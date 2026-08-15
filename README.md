@@ -119,4 +119,9 @@ configured until the account is KYC-activated for live mode.
 
 ## License
 
-MIT
+Scout.io is free and open-source software licensed under the
+[GNU Affero General Public License v3.0](https://www.gnu.org/licenses/agpl-3.0.html).
+
+Copyright © 2026 Contributors of Scout.io
+
+See the [LICENSE](LICENSE) file for the complete license text.

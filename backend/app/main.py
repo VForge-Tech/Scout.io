@@ -10,6 +10,7 @@ from slowapi.middleware import SlowAPIMiddleware
 
 from app.api.router import api_router
 from app.core.config import get_settings
+from app.core.rate_limit import limiter
 from app.core.secrets import init_secret_manager
 
 settings = get_settings()
@@ -49,7 +50,6 @@ app = FastAPI(
 from slowapi import Limiter
 from slowapi.util import get_remote_address
 
-limiter = Limiter(key_func=get_remote_address)
 app.state.limiter = limiter
 app.add_exception_handler(RateLimitExceeded, _rate_limit_exceeded_handler)
 app.add_middleware(SlowAPIMiddleware)
