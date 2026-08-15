@@ -4,6 +4,7 @@ from fastapi import APIRouter, Depends, HTTPException, Request, status
 from sqlalchemy.orm import Session
 
 from app.api.deps import get_current_user, get_db_with_org
+from app.core.billing.limits import assert_chatbot_limit
 from app.models import Chatbot, User
 from app.schemas.chatbot import ChatbotCreate, ChatbotRead, ChatbotUpdate
 from app.utils.audit import create_audit_log
@@ -47,6 +48,11 @@ def create_chatbot(
     db: Session = Depends(get_db_with_org),
     user: User = Depends(get_current_user),
 ):
+    from app.models import Organization
+
+    org = db.query(Organization).filter(Organization.id == user.organization_id).first()
+    assert_chatbot_limit(db, org)
+
     chatbot = Chatbot(
         organization_id=user.organization_id,
         name=payload.name,

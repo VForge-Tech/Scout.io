@@ -264,6 +264,18 @@ class SecretManager:
         """Get webhook signing secret from Vault or environment."""
         return self.get_secret("webhook_secret")
 
+    def get_razorpay_key_id(self) -> Optional[str]:
+        """Get Razorpay Key ID from Vault or environment."""
+        return self.get_secret("razorpay_key_id")
+
+    def get_razorpay_key_secret(self) -> Optional[str]:
+        """Get Razorpay Key Secret from Vault or environment."""
+        return self.get_secret("razorpay_key_secret")
+
+    def get_razorpay_webhook_secret(self) -> Optional[str]:
+        """Get Razorpay webhook signing secret from Vault or environment."""
+        return self.get_secret("razorpay_webhook_secret")
+
 
 # Global instance
 _secret_manager: Optional[SecretManager] = None

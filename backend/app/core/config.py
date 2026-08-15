@@ -47,6 +47,16 @@ class Settings(BaseSettings):
     celery_broker_url: str = ""
     celery_result_backend: str = ""
 
+    # Razorpay billing (test-mode keys; provisioned via Vault in production)
+    razorpay_key_id: str | None = None
+    razorpay_key_secret: str | None = None
+    razorpay_webhook_secret: str | None = None
+
+    # Billing feature flag. Disabled by default (testing/dev builds) so plan
+    # limits are not enforced and checkout/webhook endpoints return 503.
+    # Enable with BILLING_ENABLED=true in production.
+    billing_enabled: bool = False
+
     cors_origins: list[str] = ["http://localhost:3000", "http://localhost:8000"]
 
     rate_limit_per_ip: str = "100/minute"
@@ -88,6 +98,9 @@ class Settings(BaseSettings):
             "azure_openai_api_key": secret_manager.get_azure_openai_api_key(),
             "celery_broker_url": secret_manager.get_celery_broker_url(),
             "celery_result_backend": secret_manager.get_celery_result_backend(),
+            "razorpay_key_id": secret_manager.get_razorpay_key_id(),
+            "razorpay_key_secret": secret_manager.get_razorpay_key_secret(),
+            "razorpay_webhook_secret": secret_manager.get_razorpay_webhook_secret(),
         }
         # Merge with any provided kwargs (kwargs takes precedence)
         merged = {**secrets, **kwargs}

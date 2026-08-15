@@ -227,11 +227,27 @@
 - **Cross-org isolation verified**: analytics tests confirm org A cannot read org B's daily or aggregate analytics (404), plus `/auth/me` test
 - **Total test suite**: 124 passing (114 + 10 analytics/auth tests), 8 skipped (PostgreSQL-only RLS)
 
+### Sprint 13: Plans & Billing (Razorpay Subscriptions) [COMPLETED]
+- **Plan tiers** (`backend/app/core/billing/plans.py`): Free / Starter (₹2,999) / Growth (₹9,999) / Scale (₹29,999) with concrete limits per tier — chatbots allowed, monthly message volume, knowledge source count
+- **Organization model + migration 0007**: added `plan`, `plan_status`, `razorpay_customer_id`, `razorpay_subscription_id` columns (indexed)
+- **Razorpay integration** (`backend/app/core/billing/razorpay_client.py`):
+  - `POST /organizations/me/billing/checkout-session` creates a Razorpay customer + subscription for the selected plan, returns the Razorpay-hosted checkout URL
+  - `POST /webhooks/razorpay` handles `subscription.activated`, `subscription.charged`, `subscription.cancelled`, `subscription.halted`, updating org plan/status and writing audit log entries (`billing.plan_activated`, `plan_cancelled`, `plan_halted`, `subscription_charged`)
+  - Every webhook verifies `X-Razorpay-Signature` (HMAC-SHA256 of the raw body, constant-time compare); unsigned/invalid payloads rejected
+  - Org resolution from subscription `notes.organization_id` with fallback to stored `razorpay_subscription_id`
+- **Plan limits enforced at API layer** (`backend/app/core/billing/limits.py`): chatbot create, knowledge source create, and widget message processing all reject past the plan limit with HTTP 402 + clear message; cancelled/halted orgs auto-downgrade to Free tier for enforcement
+- **Keys via Vault**: `razorpay_key_id`, `razorpay_key_secret`, `razorpay_webhook_secret` pulled through the existing SecretManager (env fallback in dev); test-mode keys only, never hardcoded
+- **Feature flag**: `billing_enabled` (`BILLING_ENABLED`, default `false`). Off in testing/dev — plan limits not enforced (no-op), checkout/webhook endpoints return 503, frontend billing page shows a "Billing is disabled in this environment" notice. Enable `BILLING_ENABLED=true` in production.
+- **Frontend** (`/dashboard/billing`): current plan, usage vs limits cards, plan cards with Upgrade → redirect to Razorpay checkout (disabled when the flag is off)
+- **Docs**: `docs/Plans and Billing.md` — tiers/limits, Vault key provisioning, webhook registration, feature flag, live-mode checklist (KYC note)
+- **Tests**: 20 billing tests (checkout-session, signature rejection, all four webhook events, plan limit enforcement for chatbots/knowledge sources/messages, cancelled-downgrade, usage summary, disabled-flag 503 behavior)
+- **Total test suite**: 145 passing (142 + 3 flag tests), 8 skipped (PostgreSQL-only RLS)
+
 ---
 
 ## Phase V: In Progress / Planned
 - Multi-factor authentication (TOTP-based)
-- Advanced cost tracking and budget alerts per organization/chatbot
+- Advanced cost tracking and budget alerts per organization/chatbot (plan tiers/billing done in Sprint 13; feature-flagged)
 - Performance optimization: incremental sync, intelligent caching improvements
 - SDK generation for Python, JavaScript, Go (Python/JS done)
 - Real-time analytics dashboard updates (WebSocket-based; static/date-range charts done in Sprint 12)

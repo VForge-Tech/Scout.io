@@ -15,7 +15,8 @@ Scout.io is a multi-tenant AI platform that enables organizations to ingest, ind
 | Vector Database | Qdrant |
 | Cache & Session | Redis |
 | Background Tasks | Celery + Redis |
-| AI Abstraction | LiteLLM (planned) |
+| AI Abstraction | LiteLLM |
+| Payments | Razorpay Subscriptions (test-mode; feature-flagged) |
 | Containerization | Docker + Docker Compose |
 
 ## Project Structure
@@ -90,6 +91,31 @@ cd backend && pytest
 cd frontend && npm test
 cd widget && npm test
 ```
+
+## Features
+
+- Multi-tenant orgs with JWT auth and role-based access control
+- Chatbot management: create/rename/delete, model tiers, policies, widget snippets
+- Knowledge sources: file upload (PDF/Markdown/DOCX/TXT), website, SQL/API/Git connectors
+- Tenant dashboard: overview, settings, analytics (recharts), billing
+- Analytics: org-scoped time-series, per-chatbot token usage, per-source usage
+- Plans & billing via Razorpay Subscriptions (Starter/Growth/Scale), plan-limit enforcement
+- Embeddable chat widgets (Python & JavaScript SDKs)
+- PostgreSQL Row-Level Security for org isolation
+- Secrets via HashiCorp Vault with env fallback in development
+
+## Billing & Payments
+
+Billing uses Razorpay Subscriptions and is controlled by a **feature flag**:
+
+| Env var | Default | Meaning |
+|---------|---------|---------|
+| `BILLING_ENABLED` | `false` | `false` for testing/dev (no limit enforcement, checkout/webhook return 503, billing page shows "disabled"). Set `true` in production. |
+
+Plan tiers (Free / Starter / Growth / Scale) and limits are documented in
+[`docs/Plans and Billing.md`](docs/Plans%20and%20Billing.md). Razorpay keys are pulled
+through the Vault wrapper (`backend/app/core/secrets.py`); only test-mode keys should be
+configured until the account is KYC-activated for live mode.
 
 ## License
 

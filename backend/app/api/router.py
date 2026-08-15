@@ -5,6 +5,7 @@ from app.api.endpoints import (
     analytics,
     analytics_v2,
     auth,
+    billing,
     chatbots,
     developer,
     knowledge_sources,
@@ -35,3 +36,4 @@ api_router.include_router(widget_api.router)
 api_router.include_router(retrieval.router)
 api_router.include_router(admin.router)
 api_router.include_router(uploads.router)
+api_router.include_router(billing.router)

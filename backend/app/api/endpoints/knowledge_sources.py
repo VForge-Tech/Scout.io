@@ -4,6 +4,7 @@ from fastapi import APIRouter, Depends, HTTPException, Request, status
 from sqlalchemy.orm import Session
 
 from app.api.deps import get_current_user, get_db_with_org
+from app.core.billing.limits import assert_knowledge_source_limit
 from app.core.config import get_settings
 from app.models import Chatbot, KnowledgeSource, User
 from app.schemas.knowledge_source import (
@@ -81,6 +82,10 @@ def create_knowledge_source(
     user: User = Depends(get_current_user),
 ):
     _get_chatbot(db, chatbot_id, user)
+    from app.models import Organization
+
+    org = db.query(Organization).filter(Organization.id == user.organization_id).first()
+    assert_knowledge_source_limit(db, org)
     config = payload.config or {}
     if payload.connector_type:
         config["_connector_type"] = payload.connector_type

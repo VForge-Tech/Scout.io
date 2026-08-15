@@ -17,6 +17,10 @@ os.environ.setdefault("CELERY_BROKER_URL", "redis://localhost:6379/1")
 os.environ.setdefault("CELERY_RESULT_BACKEND", "redis://localhost:6379/1")
 os.environ.setdefault("DEPLOYMENT_ENV", "development")
 os.environ.setdefault("VAULT_ADDR", "http://localhost:8200")
+os.environ.setdefault("RAZORPAY_KEY_ID", "rzp_test_placeholder")
+os.environ.setdefault("RAZORPAY_KEY_SECRET", "test-secret-placeholder")
+os.environ.setdefault("RAZORPAY_WEBHOOK_SECRET", "test-webhook-secret")
+os.environ.setdefault("BILLING_ENABLED", "true")
 
 from app.api.deps import get_db, get_db_admin, get_db_with_org, get_db_for_admin, get_current_user
 from app.core.config import get_settings

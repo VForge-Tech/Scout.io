@@ -4,6 +4,7 @@ from fastapi import APIRouter, Depends, HTTPException, Request, status
 from sqlalchemy.orm import Session
 
 from app.api.deps import get_db, optional_current_user
+from app.core.billing.limits import assert_message_quota
 from app.core.pipeline.response_pipeline import ResponsePipeline
 from app.core.security import create_access_token, decode_token
 from app.db.session import get_db as get_db_base
@@ -106,6 +107,11 @@ def send_widget_message(
     db: Session = Depends(get_db),
     session: SessionModel = Depends(get_widget_session),
 ):
+    from app.models import Organization
+
+    org = db.query(Organization).filter(Organization.id == session.organization_id).first()
+    assert_message_quota(db, org)
+
     user_msg = Message(
         session_id=session.id,
         role="user",

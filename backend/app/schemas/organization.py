@@ -8,6 +8,10 @@ class OrganizationRead(BaseModel):
     id: UUID
     name: str
     configuration: dict
+    plan: str
+    plan_status: str
+    razorpay_customer_id: str | None = None
+    razorpay_subscription_id: str | None = None
     created_at: datetime
     updated_at: datetime
 
