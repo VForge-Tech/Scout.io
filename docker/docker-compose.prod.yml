@@ -20,6 +20,8 @@ services:
 
   backend:
     restart: always
+    labels:
+      - logging=promtail
     environment:
       - DEBUG=false
       - VAULT_ADDR=http://vault:8200
@@ -42,6 +44,8 @@ services:
       dockerfile: Dockerfile
     ports:
       - "3000:3000"
+    labels:
+      - logging=promtail
     env_file:
       - ../frontend/.env
     depends_on:
@@ -68,13 +72,17 @@ services:
     command: celery -A app.tasks.embedding_tasks.celery_app worker --loglevel=info
     env_file:
       - ../backend/.env
+    labels:
+      - logging=promtail
     environment:
       - VAULT_ADDR=http://vault:8200
       - VAULT_TOKEN=${VAULT_TOKEN}
     depends_on:
-      - redis
-      - postgres
-      - vault
+      redis:
+        condition: service_healthy
+      postgres:
+        condition: service_healthy
+      vault:
         condition: service_healthy
     restart: always
     deploy:
@@ -90,13 +98,17 @@ services:
     command: celery -A app.tasks.billing_tasks.celery_app worker --loglevel=info
     env_file:
       - ../backend/.env
+    labels:
+      - logging=promtail
     environment:
       - VAULT_ADDR=http://vault:8200
       - VAULT_TOKEN=${VAULT_TOKEN}
     depends_on:
-      - redis
-      - postgres
-      - vault
+      redis:
+        condition: service_healthy
+      postgres:
+        condition: service_healthy
+      vault:
         condition: service_healthy
     restart: always
     deploy:
@@ -112,13 +124,17 @@ services:
     command: celery -A app.tasks.analytics_tasks.celery_app beat --loglevel=info
     env_file:
       - ../backend/.env
+    labels:
+      - logging=promtail
     environment:
       - VAULT_ADDR=http://vault:8200
       - VAULT_TOKEN=${VAULT_TOKEN}
     depends_on:
-      - redis
-      - postgres
-      - vault
+      redis:
+        condition: service_healthy
+      postgres:
+        condition: service_healthy
+      vault:
         condition: service_healthy
     restart: always
 
@@ -129,13 +145,17 @@ services:
     command: celery -A app.tasks.billing_tasks.celery_app beat --loglevel=info
     env_file:
       - ../backend/.env
+    labels:
+      - logging=promtail
     environment:
       - VAULT_ADDR=http://vault:8200
       - VAULT_TOKEN=${VAULT_TOKEN}
     depends_on:
-      - redis
-      - postgres
-      - vault
+      redis:
+        condition: service_healthy
+      postgres:
+        condition: service_healthy
+      vault:
         condition: service_healthy
     restart: always
 
@@ -170,9 +190,86 @@ services:
       - pgvector_data:/var/lib/postgresql/data
     restart: always
 
+  # ─── Observability stack ────────────────────────────────────────────────
+  # Prometheus scrapes the backend /metrics endpoint (JSON logs are already
+  # shipped to Loki by promtail). Grafana is provisioned from docker/grafana/.
+  prometheus:
+    image: prom/prometheus:v2.53.0
+    ports:
+      - "9090:9090"
+    volumes:
+      - ./prometheus/prometheus.yml:/etc/prometheus/prometheus.yml:ro
+      - ./prometheus/alerts.yml:/etc/prometheus/alerts.yml:ro
+      - prometheus_data:/prometheus
+    command:
+      - --config.file=/etc/prometheus/prometheus.yml
+      - --storage.tsdb.retention.time=30d
+    depends_on:
+      - backend
+    restart: always
+
+  grafana:
+    image: grafana/grafana:11.1.0
+    ports:
+      - "3001:3000"
+    environment:
+      - GF_SECURITY_ADMIN_USER=${GRAFANA_ADMIN_USER:-admin}
+      - GF_SECURITY_ADMIN_PASSWORD=${GRAFANA_ADMIN_PASSWORD:-admin}
+      - GF_USERS_ALLOW_SIGN_UP=false
+      - GF_SERVER_ROOT_URL=${GRAFANA_ROOT_URL:-http://grafana:3000}
+    volumes:
+      - ./grafana/provisioning:/etc/grafana/provisioning:ro
+      - ./grafana/dashboards:/var/lib/grafana/dashboards:ro
+      - grafana_data:/var/lib/grafana
+    depends_on:
+      - prometheus
+      - loki
+    restart: always
+
+  loki:
+    image: grafana/loki:3.1.0
+    ports:
+      - "3100:3100"
+    volumes:
+      - ./loki/loki-config.yml:/etc/loki/loki-config.yml:ro
+      - loki_data:/loki
+    command: -config.file=/etc/loki/loki-config.yml
+    restart: always
+
+  promtail:
+    image: grafana/promtail:3.1.0
+    volumes:
+      - ./promtail/promtail-config.yml:/etc/promtail/promtail-config.yml:ro
+      - /var/run/docker.sock:/var/run/docker.sock:ro
+      - /var/lib/docker/containers:/var/lib/docker/containers:ro
+    command: -config.file=/etc/promtail/promtail-config.yml
+    depends_on:
+      - loki
+    restart: always
+
+  alertmanager:
+    image: prom/alertmanager:v0.27.0
+    ports:
+      - "9093:9093"
+    environment:
+      - SLACK_WEBHOOK_URL=${SLACK_WEBHOOK_URL:-}
+    volumes:
+      - ./alertmanager/alertmanager.yml:/etc/alertmanager/alertmanager.yml:ro
+      - ./alertmanager/template.tmpl:/etc/alertmanager/template.tmpl:ro
+      - alertmanager_data:/alertmanager
+    command:
+      - /bin/sh
+      - -c
+      - 'test -n "$SLACK_WEBHOOK_URL" && printf "%s" "$SLACK_WEBHOOK_URL" > /etc/alertmanager/slack_webhook || echo "SLACK_WEBHOOK_URL not set; Slack notifications disabled" >&2; exec alertmanager --config.file=/etc/alertmanager/alertmanager.yml --log.level=debug'
+    restart: always
+
 volumes:
   qdrant_data:
   ollama_data:
   pgvector_data:
   vault_data:
   vault_logs:
+  prometheus_data:
+  grafana_data:
+  loki_data:
+  alertmanager_data:

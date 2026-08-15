@@ -1,0 +1,81 @@
+{
+  "uid": "scout-celery",
+  "title": "Scout Celery",
+  "tags": ["scout", "celery"],
+  "timezone": "browser",
+  "schemaVersion": 39,
+  "version": 1,
+  "refresh": "30s",
+  "time": { "from": "now-6h", "to": "now" },
+  "panels": [
+    {
+      "type": "timeseries",
+      "title": "Queue Depth (celery)",
+      "id": 1,
+      "gridPos": { "h": 8, "w": 12, "x": 0, "y": 0 },
+      "datasource": { "type": "prometheus", "uid": "scout-prom" },
+      "targets": [
+        {
+          "expr": "scout_celery_queue_depth",
+          "legendFormat": "{{queue}}"
+        }
+      ]
+    },
+    {
+      "type": "timeseries",
+      "title": "Queue Growth (delta over 10m)",
+      "id": 2,
+      "gridPos": { "h": 8, "w": 12, "x": 12, "y": 0 },
+      "datasource": { "type": "prometheus", "uid": "scout-prom" },
+      "targets": [
+        {
+          "expr": "increase(scout_celery_queue_depth[10m])",
+          "legendFormat": "{{queue}}"
+        }
+      ]
+    },
+    {
+      "type": "timeseries",
+      "title": "Task Success / Failure Rate",
+      "id": 3,
+      "gridPos": { "h": 8, "w": 12, "x": 0, "y": 8 },
+      "datasource": { "type": "prometheus", "uid": "scout-prom" },
+      "targets": [
+        {
+          "expr": "sum by (task) (rate(scout_celery_tasks_total{state=\"success\"}[5m]))",
+          "legendFormat": "ok {{task}}"
+        },
+        {
+          "expr": "sum by (task) (rate(scout_celery_tasks_total{state=\"failure\"}[5m]))",
+          "legendFormat": "fail {{task}}"
+        }
+      ]
+    },
+    {
+      "type": "stat",
+      "title": "Task Failure Rate (15m)",
+      "id": 4,
+      "gridPos": { "h": 8, "w": 12, "x": 12, "y": 8 },
+      "datasource": { "type": "prometheus", "uid": "scout-prom" },
+      "targets": [
+        {
+          "expr": "sum(rate(scout_celery_tasks_total{state=\"failure\"}[15m])) / (sum(rate(scout_celery_tasks_total{state=\"failure\"}[15m])) + sum(rate(scout_celery_tasks_total{state=\"success\"}[15m])))",
+          "legendFormat": "failure rate"
+        }
+      ],
+      "fieldConfig": {
+        "defaults": {
+          "unit": "percentunit",
+          "thresholds": {
+            "mode": "absolute",
+            "steps": [
+              { "color": "green", "value": null },
+              { "color": "yellow", "value": 0.1 },
+              { "color": "red", "value": 0.2 }
+            ]
+          }
+        }
+      }
+    }
+  ]
+}

@@ -58,6 +58,10 @@ app.add_middleware(SlowAPIMiddleware)
 from app.core.tracing import setup_tracing
 setup_tracing(app)
 
+# Metrics (/metrics + request metrics middleware + background sampler)
+from app.core.metrics import setup_metrics
+setup_metrics(app)
+
 # CORS
 app.add_middleware(
     CORSMiddleware,
@@ -79,29 +83,8 @@ async def health_check():
 
 @app.get("/health/ready")
 async def readiness_check():
-    import redis
-    from app.db.session import SessionLocal
-    services = {"self": "ok"}
-    try:
-        db = SessionLocal()
-        db.execute(db.bind.text("SELECT 1"))
-        db.close()
-        services["database"] = "ok"
-    except Exception as e:
-        services["database"] = f"error: {e}"
-    try:
-        r = redis.from_url(settings.redis_url, socket_connect_timeout=2)
-        r.ping()
-        r.close()
-        services["redis"] = "ok"
-    except Exception as e:
-        services["redis"] = f"error: {e}"
-    try:
-        from qdrant_client import QdrantClient
-        qdrant = QdrantClient(url=settings.qdrant_url)
-        qdrant.get_collections()
-        services["qdrant"] = "ok"
-    except Exception as e:
-        services["qdrant"] = f"error: {e}"
+    from app.core.health import check_dependencies
+
+    services = check_dependencies()
     all_ok = all(v == "ok" for v in services.values())
     return {"status": "healthy" if all_ok else "degraded", "services": services}

@@ -70,6 +70,9 @@ class Settings(BaseSettings):
     # Optional pgvector fallback
     pgvector_enabled: bool = False
 
+    # Observability
+    grafana_base_url: str = "http://grafana:3000"
+
     # Optional Ollama local LLM
     ollama_enabled: bool = False
     ollama_base_url: str = "http://localhost:11434"

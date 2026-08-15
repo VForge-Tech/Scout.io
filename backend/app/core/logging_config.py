@@ -24,6 +24,10 @@ class JSONLogFormatter(logging.Formatter):
         if hasattr(record, "organization_id"):
             log_entry["organization_id"] = record.organization_id
 
+        for field in ("method", "path", "status", "duration_ms", "grafana_link"):
+            if hasattr(record, field):
+                log_entry[field] = getattr(record, field)
+
         if record.exc_info and record.exc_info[0]:
             log_entry["exception"] = self.formatException(record.exc_info)
 

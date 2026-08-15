@@ -1,0 +1,64 @@
+{
+  "uid": "scout-llm",
+  "title": "Scout LLM Providers",
+  "tags": ["scout", "llm"],
+  "timezone": "browser",
+  "schemaVersion": 39,
+  "version": 1,
+  "refresh": "30s",
+  "time": { "from": "now-6h", "to": "now" },
+  "panels": [
+    {
+      "type": "timeseries",
+      "title": "Fallback Trigger Rate",
+      "id": 1,
+      "gridPos": { "h": 8, "w": 12, "x": 0, "y": 0 },
+      "datasource": { "type": "prometheus", "uid": "scout-prom" },
+      "targets": [
+        {
+          "expr": "sum by (primary_model, fallback_model) (rate(scout_llm_fallback_triggers_total[5m]))",
+          "legendFormat": "{{primary_model}} -> {{fallback_model}}"
+        }
+      ]
+    },
+    {
+      "type": "stat",
+      "title": "Total Fallbacks (24h)",
+      "id": 2,
+      "gridPos": { "h": 8, "w": 12, "x": 12, "y": 0 },
+      "datasource": { "type": "prometheus", "uid": "scout-prom" },
+      "targets": [
+        {
+          "expr": "sum(increase(scout_llm_fallback_triggers_total[24h]))",
+          "legendFormat": "fallbacks"
+        }
+      ]
+    },
+    {
+      "type": "timeseries",
+      "title": "Fallback Share of Requests",
+      "id": 3,
+      "gridPos": { "h": 8, "w": 24, "x": 0, "y": 8 },
+      "datasource": { "type": "prometheus", "uid": "scout-prom" },
+      "targets": [
+        {
+          "expr": "sum(rate(scout_llm_fallback_triggers_total[15m])) / clamp_min(sum(rate(scout_http_requests_total[15m])), 1)",
+          "legendFormat": "fallback share"
+        }
+      ],
+      "fieldConfig": {
+        "defaults": {
+          "unit": "percentunit",
+          "thresholds": {
+            "mode": "absolute",
+            "steps": [
+              { "color": "green", "value": null },
+              { "color": "yellow", "value": 0.05 },
+              { "color": "red", "value": 0.1 }
+            ]
+          }
+        }
+      }
+    }
+  ]
+}

@@ -4,8 +4,10 @@ from uuid import UUID
 from celery import Celery
 
 from app.core.config import get_settings
+from app.core.metrics import register_celery_metrics
 
 settings = get_settings()
+register_celery_metrics()
 
 celery_app = Celery(
     "scout",

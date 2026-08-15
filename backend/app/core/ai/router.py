@@ -5,6 +5,7 @@ from litellm import completion as litellm_completion
 
 from app.core.ai.config import get_fallback_chain, get_model_config
 from app.core.config import get_settings
+from app.core.metrics import LLM_FALLBACK_TRIGGERS
 
 logger = logging.getLogger(__name__)
 settings = get_settings()
@@ -50,6 +51,9 @@ class AIRouter:
                     return content
             except Exception as e:
                 logger.warning("Model %s failed: %s, trying fallback", model, e)
+                LLM_FALLBACK_TRIGGERS.labels(
+                    primary_model=self.primary_model, fallback_model=model
+                ).inc()
                 continue
 
         return self._graceful_error_response()

@@ -1,0 +1,16 @@
+{{ define "scout.title" -}}
+[{{ .Status | toUpper }}{{ if eq .Status "firing" }}:{{ .Alerts.Firing | len }}{{ end }}] {{ .CommonLabels.alertname }} ({{ .CommonLabels.severity }})
+{{- end }}
+
+{{ define "scout.text" -}}
+{{ range .Alerts.Firing -}}
+**Alert:** {{ .Labels.alertname }}
+**Severity:** {{ .Labels.severity }}
+**Summary:** {{ .Annotations.summary }}
+**Description:** {{ .Annotations.description }}
+**Grafana dashboard:** {{ .Annotations.grafana_dashboard }} — {{ .Annotations.grafana_url }}
+**Prometheus rule:** {{ .GeneratorURL }}
+
+---
+{{ end }}
+{{- end }}

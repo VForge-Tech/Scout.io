@@ -1,0 +1,80 @@
+groups:
+  - name: scout-request-metrics
+    rules:
+      - alert: APIErrorRateHigh
+        expr: |
+          (sum by (path) (rate(scout_http_requests_total{status=~"5.."}[5m]))
+           /
+           sum by (path) (rate(scout_http_requests_total[5m]))) > 0.05
+        for: 5m
+        labels:
+          severity: critical
+          team: platform
+        annotations:
+          summary: "High 5xx error rate on {{ $labels.path }}"
+          description: "Error rate on {{ $labels.path }} is {{ $value | humanizePercentage }} over the last 5 minutes (threshold 5%)."
+          grafana_dashboard: "Requests"
+          grafana_url: "http://grafana:3000/d/scout-requests"
+
+  - name: scout-dependency-health
+    rules:
+      - alert: DependencyDown
+        expr: scout_dependency_health == 0
+        for: 2m
+        labels:
+          severity: critical
+          team: platform
+        annotations:
+          summary: "Dependency {{ $labels.service }} is down"
+          description: "{{ $labels.service }} has been unhealthy for more than 2 minutes (see /health/ready)."
+          grafana_dashboard: "Dependency Health"
+          grafana_url: "http://grafana:3000/d/scout-dependencies"
+
+  - name: scout-celery
+    rules:
+      - alert: CeleryQueueGrowing
+        expr: |
+          increase(scout_celery_queue_depth[10m]) > 0
+          and on(queue) scout_celery_queue_depth > 10
+        for: 5m
+        labels:
+          severity: warning
+          team: platform
+        annotations:
+          summary: "Celery queue {{ $labels.queue }} is growing"
+          description: "Queue {{ $labels.queue }} depth is {{ $labels.scout_celery_queue_depth }} and increasing over the last 10 minutes."
+          grafana_dashboard: "Celery"
+          grafana_url: "http://grafana:3000/d/scout-celery"
+
+      - alert: CeleryTaskFailureRateHigh
+        expr: |
+          (sum(rate(scout_celery_tasks_total{state="failure"}[15m]))
+           /
+           (sum(rate(scout_celery_tasks_total{state="failure"}[15m])) + sum(rate(scout_celery_tasks_total{state="success"}[15m]))))
+          > 0.2
+        for: 10m
+        labels:
+          severity: warning
+          team: platform
+        annotations:
+          summary: "High Celery task failure rate"
+          description: "More than 20% of Celery tasks have failed over the last 15 minutes."
+          grafana_dashboard: "Celery"
+          grafana_url: "http://grafana:3000/d/scout-celery"
+
+  - name: scout-llm-fallback
+    rules:
+      - alert: LLMFallbackRateHigh
+        expr: |
+          sum(rate(scout_llm_fallback_triggers_total[15m]))
+          / clamp_min(sum(rate(scout_http_requests_total[15m])), 1)
+          > 0.1
+        for: 10m
+        labels:
+          severity: warning
+          team: platform
+        annotations:
+          summary: "LLM provider fallback rate elevated"
+          description: "Fallback triggers are {{ $value | humanizePercentage }} of chat requests; providers may be degraded."
+          grafana_dashboard: "LLM Providers"
+          grafana_url: "http://grafana:3000/d/scout-llm"
