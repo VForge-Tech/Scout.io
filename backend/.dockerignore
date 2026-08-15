@@ -1,0 +1,38 @@
+# VCS / CI
+.git
+.github
+.gitignore
+
+# Environment files (keep the example for reference)
+.env
+.env.*
+!.env.example
+
+# Python build artifacts
+__pycache__/
+*.py[cod]
+*.egg-info/
+.venv/
+venv/
+.pytest_cache/
+.mypy_cache/
+htmlcov/
+.coverage
+
+# Test fixtures & DBs (not needed in the runtime image)
+tests/
+test_scout.db
+test_*.db
+*.sqlite
+
+# Local tooling / OS
+.idea/
+.vscode/
+*.swp
+*.swo
+*~
+.DS_Store
+Thumbs.db
+
+# Docs (kept in the repo, not the image)
+docs/

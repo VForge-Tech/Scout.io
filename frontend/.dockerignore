@@ -1,0 +1,32 @@
+# VCS / CI
+.git
+.github
+.gitignore
+
+# Environment files (keep the example for reference)
+.env
+.env.*
+!.env.example
+
+# Node build artifacts
+node_modules/
+.next/
+out/
+npm-debug.log*
+yarn-error.log*
+
+# Tests (kept in the repo, not the image)
+tests/
+coverage/
+
+# Docs
+docs/
+
+# Local tooling / OS
+.idea/
+.vscode/
+*.swp
+*.swo
+*~
+.DS_Store
+Thumbs.db

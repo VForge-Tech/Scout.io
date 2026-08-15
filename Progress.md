@@ -282,12 +282,24 @@
 - **No staging/prod deploys**: `deploy-staging.yml` intentionally not created — staging env (4.2: docker-compose.staging.yml, host, docs/staging.md) doesn't exist yet; production deploys stay manual/gated until Sprint 6 DR work
 - **Verification**: 3 frontend + 2 widget vitest tests pass, both typechecks clean, frontend `next build` clean, backend pytest sanity passes; workflows validated as parseable YAML
 
+### Sprint 17: Staging Environment + Dockerignore [COMPLETED]
+- **`.dockerignore` files** added to `backend/`, `frontend/`, and `widget/` (per build context), excluding `.git`, `.env*` (keeping `.env.example`), `node_modules`, `.next`/`dist` build artifacts, `__pycache__`/`.venv`/`*.py[cod]`, test directories, and `docs`. Build context sizes verified with `docker build --progress=plain`:
+  - `backend`: 2.12MB → **24.00kB**
+  - `frontend`: 461.52MB → **384.03kB**
+  - `widget`: 104.01MB → **141.28kB**
+  - All three images built clean and test images removed after verification
+- **`docker-compose.staging.yml`**: based on `docker-compose.prod.yml` but fully self-contained — separate Postgres (`scout_staging` DB), Redis, Qdrant, and Vault instances with `staging_*` volumes so staging never touches production data. Backend runs `DEPLOYMENT_ENV=staging` (secrets from `secret/scout-io/staging/*` with env-var fallbacks since Vault isn't required for staging), `BILLING_ENABLED=true` against Razorpay test keys, GHCR image names (`ghcr.io/<namespace>/backend|frontend:latest|sha`) with source `build:` fallback. Celery worker/billing/beat services included. Nginx mounts the staging vhost; host ports default `8080`/`8443` so it can coexist with production
+- **`docker/nginx/nginx.staging.conf`**: staging-only virtual host (`staging.scout.io`), 80→443 redirect + TLS from `./nginx/ssl`, same proxy paths as prod (`/api/`, `/ws`, `/health`, `/docs`, `/redoc`, `/openapi.json`, `/`)
+- **Frontend Dockerfile**: now accepts `NEXT_PUBLIC_API_URL` / `NEXT_PUBLIC_WS_URL` as build args so the staging image is compiled against the staging API/WS URLs instead of localhost
+- **`docs/staging.md`**: end-to-end deploy (host provisioning, `docker/.env`, TLS certs, staging Vault secret provisioning incl. Razorpay test keys, `pull`/`up -d`, migrations) plus **reset/seed procedure** (`down -v --remove-orphans` wipes all `staging_*` volumes → re-up → `alembic upgrade head` → `scripts/seed_test_data.py`) and isolation guarantees
+- **Compose validation**: `docker compose -f docker-compose.staging.yml config` passes (also fixed a latent malformed `depends_on` list+condition mix present in prod.yml)
+
 ---
 
 ## Phase V: In Progress / Planned
 - Multi-factor authentication (TOTP-based)
 - Advanced cost tracking and budget alerts per organization/chatbot (plan tiers/billing + usage-based overage + subscription management done in Sprints 13–15; feature-flagged)
-- CI/CD: PR CI + GHCR image builds done in Sprint 16; staging deploy (4.2) and approval-gated production deploy (post-Sprint 6 DR) not yet wired
+- CI/CD: PR CI + GHCR image builds done in Sprint 16; staging compose/docs done in Sprint 17; deploy-staging.yml and approval-gated production deploy not yet wired
 - Performance optimization: incremental sync, intelligent caching improvements
 - SDK generation for Python, JavaScript, Go (Python/JS done)
 - Real-time analytics dashboard updates (WebSocket-based; static/date-range charts done in Sprint 12)
