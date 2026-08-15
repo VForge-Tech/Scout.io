@@ -1,0 +1,29 @@
+import { describe, it, expect, vi, afterEach } from 'vitest';
+import { api, fetchArray } from '../src/lib/api';
+
+afterEach(() => {
+  vi.unstubAllGlobals();
+});
+
+describe('api client smoke tests', () => {
+  it('exposes the expected request helpers', () => {
+    expect(api.get).toBeTypeOf('function');
+    expect(api.post).toBeTypeOf('function');
+    expect(api.put).toBeTypeOf('function');
+    expect(api.patch).toBeTypeOf('function');
+    expect(api.delete).toBeTypeOf('function');
+    expect(api.upload).toBeTypeOf('function');
+  });
+
+  it('fetchArray returns [] on request failure instead of throwing', async () => {
+    vi.stubGlobal('fetch', vi.fn().mockResolvedValue({ ok: false, status: 500, statusText: 'boom', json: async () => ({ detail: 'boom' }) }));
+    const result = await fetchArray('/chatbots');
+    expect(result).toEqual([]);
+  });
+
+  it('fetchArray returns the array on success', async () => {
+    vi.stubGlobal('fetch', vi.fn().mockResolvedValue({ ok: true, status: 200, json: async () => [{ id: 'cb_1' }] }));
+    const result = await fetchArray('/chatbots');
+    expect(result).toEqual([{ id: 'cb_1' }]);
+  });
+});

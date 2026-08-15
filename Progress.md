@@ -270,11 +270,24 @@
 - **Tests**: 10 new (subscription detail no-subscription / with-invoices / invoice-failure best-effort, change-plan success + unknown/free plan + no-subscription, cancel at-cycle-end keeps active + immediate flags cancelled + no-subscription, 503 when disabled)
 - **Total test suite**: 170 passing, 8 skipped (PostgreSQL-only RLS) — frontend build clean
 
+### Sprint 16: CI/CD Pipeline & Branch Protection [COMPLETED]
+- **Frontend test setup added**: no `npm test` existed despite the README claiming one — installed `vitest` (dev dep), added `test` (`vitest run`) and `typecheck` (`tsc --noEmit`) scripts, and a smoke test (`tests/smoke.test.ts`) covering the api client helpers and `fetchArray`. Removed the non-functional `next lint` script (no ESLint config exists in the repo) in favor of `tsc --noEmit` typechecking
+- **Widget test setup added**: installed `vitest`, `jsdom`, `@testing-library/react` (dev deps), added `test` script, `vitest.config.ts` (jsdom env + `@` alias), `tests/setup.ts` (jsdom `matchMedia` stub), and a smoke test rendering `ThemeProvider` (`tests/smoke.test.tsx`); kept existing `lint` (`tsc --noEmit`)
+- **CI workflow** (`.github/workflows/ci.yml`): on every PR, three parallel jobs that each fail the check on any failing step —
+  - `Backend (pytest + syntax)`: full `python -m pytest tests/ -q` + `compileall` syntax check, Python 3.12 with pip cache keyed on `requirements.txt`
+  - `Frontend (vitest + typecheck)`: `npm ci` → `npm test` → `npm run typecheck`, npm cache keyed on `package-lock.json`
+  - `Widget (vitest + typecheck)`: `npm ci` → `npm test` → `npm run lint`, npm cache keyed on `package-lock.json`
+- **Build workflow** (`.github/workflows/build.yml`): on push to `main` (after merge), builds and pushes `backend` / `frontend` / `widget` images to GitHub Container Registry (GHCR) tagged with the commit SHA + `latest`; Docker Buildx + `type=gha` layer caching per service; GHCR login via `GITHUB_TOKEN` (`packages: write`); image namespace lowercased for GHCR
+- **Branch protection**: `docs/CI-CD.md` documents the two workflows, the required-status-check settings for `main` (the three CI job names), and notes the only secrets needed are the built-in `GITHUB_TOKEN`
+- **No staging/prod deploys**: `deploy-staging.yml` intentionally not created — staging env (4.2: docker-compose.staging.yml, host, docs/staging.md) doesn't exist yet; production deploys stay manual/gated until Sprint 6 DR work
+- **Verification**: 3 frontend + 2 widget vitest tests pass, both typechecks clean, frontend `next build` clean, backend pytest sanity passes; workflows validated as parseable YAML
+
 ---
 
 ## Phase V: In Progress / Planned
 - Multi-factor authentication (TOTP-based)
 - Advanced cost tracking and budget alerts per organization/chatbot (plan tiers/billing + usage-based overage + subscription management done in Sprints 13–15; feature-flagged)
+- CI/CD: PR CI + GHCR image builds done in Sprint 16; staging deploy (4.2) and approval-gated production deploy (post-Sprint 6 DR) not yet wired
 - Performance optimization: incremental sync, intelligent caching improvements
 - SDK generation for Python, JavaScript, Go (Python/JS done)
 - Real-time analytics dashboard updates (WebSocket-based; static/date-range charts done in Sprint 12)
