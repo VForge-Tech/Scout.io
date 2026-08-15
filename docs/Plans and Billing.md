@@ -143,6 +143,29 @@ The billing beat and worker are separate compose services (`celery_billing_beat`
 `celery_billing_worker`) in `docker/docker-compose.prod.yml`. The worker app includes
 both `billing_tasks` and `analytics_tasks`.
 
+## Subscription management
+
+Razorpay has **no self-serve customer portal**, so subscription management is done
+in-house against its subscription APIs. Endpoints are org-scoped under
+`/api/v1/organizations/me/billing/`:
+
+- `GET /subscription` — returns `SubscriptionDetail`. New signups with no
+  `razorpay_subscription_id` get `has_subscription=false` (the frontend shows a
+  clear trial/free state rather than an error). Otherwise it fetches the Razorpay
+  subscription, maps `plan_id` back to a plan key, and lists the invoice history
+  (`client.invoice.all`) — invoice listing is best-effort and won't fail the detail view.
+- `POST /subscription/change-plan` — upgrades/downgrades via `subscription.edit`
+  with `schedule_change_at` ∈ {`now`, `cycle_end`}. The org's plan is updated in the
+  DB immediately (Razorpay sends no plan-change webhook); limits reflect it at once.
+- `POST /subscription/cancel` — calls `subscription.cancel`. Default
+  `cancel_at_cycle_end=true` keeps the org **active** until the paid period ends
+  (the `subscription.cancelled` webhook flips enforcement at cycle end); passing
+  `cancel_at_cycle_end=false` flags `plan_status="cancelled"` immediately.
+- The frontend `/dashboard/billing` renders the current plan + renewal date +
+  payment method, invoice history, usage-vs-limits progress bars, a plan comparison
+  grid (checkout-session for new subscriptions, change-plan for existing ones), the
+  80% usage warning banner, and a Trial/Free state for orgs without a subscription.
+
 ## Webhook registration in Razorpay
 
 1. In the Razorpay Dashboard (test mode), go to **Settings → Webhooks**.

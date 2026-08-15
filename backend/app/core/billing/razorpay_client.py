@@ -121,13 +121,52 @@ def fetch_subscription(subscription_id: str) -> dict:
         raise RazorpayError(f"Failed to fetch Razorpay subscription: {e}") from e
 
 
-def cancel_subscription(subscription_id: str) -> dict:
+def cancel_subscription(subscription_id: str, cancel_at_cycle_end: bool = False) -> dict:
+    """Cancel a subscription.
+
+    Razorpay cancels immediately by default. Passing ``cancel_at_cycle_end=True``
+    keeps the subscription active until the current billing cycle ends and only
+    then marks it cancelled (avoids interrupting an already-paid period).
+    """
     client = get_client()
+    data = {"cancel_at_cycle_end": bool(cancel_at_cycle_end)}
     try:
-        return client.subscription.cancel(subscription_id)
+        return client.subscription.cancel(subscription_id, data)
     except Exception as e:
         logger.exception("Razorpay subscription.cancel failed")
         raise RazorpayError(f"Failed to cancel Razorpay subscription: {e}") from e
+
+
+def update_subscription(
+    subscription_id: str,
+    plan_id: str,
+    schedule_change_at: str = "now",
+) -> dict:
+    """Change the plan on an existing subscription (upgrade/downgrade).
+
+    Razorpay has no self-serve customer portal, so plan changes go straight to
+    ``subscription.edit``. ``schedule_change_at`` is ``"now"`` (takes effect
+    immediately) or ``"cycle_end"`` (takes effect at the next billing cycle).
+    """
+    client = get_client()
+    data = {"plan_id": plan_id, "schedule_change_at": schedule_change_at}
+    try:
+        return client.subscription.edit(subscription_id, data)
+    except Exception as e:
+        logger.exception("Razorpay subscription.edit (change plan) failed")
+        raise RazorpayError(f"Failed to change plan on Razorpay subscription: {e}") from e
+
+
+def list_subscription_invoices(subscription_id: str) -> list[dict]:
+    """Return the invoice history for a subscription (newest first)."""
+    client = get_client()
+    try:
+        resp = client.invoice.all({"subscription_id": subscription_id})
+    except Exception as e:
+        logger.exception("Razorpay invoice.all failed")
+        raise RazorpayError(f"Failed to fetch subscription invoices: {e}") from e
+    items = resp.get("items") or [] if isinstance(resp, dict) else []
+    return sorted(items, key=lambda i: i.get("created_at", 0), reverse=True)
 
 
 def create_addon(

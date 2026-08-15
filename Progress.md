@@ -258,11 +258,23 @@
 - **Tests**: 16 new tests (pricing math + model matching, aggregation create/upsert, Razorpay add-on report + failure fallback + no-subscription skip, soft-limit once-per-period + below-threshold, endpoint warning/usage_billing surface, pipeline LLMUsage recording incl. provider-usage capture, no-db skip)
 - **Total test suite**: 161 passing (145 + 16), 8 skipped (PostgreSQL-only RLS) — frontend build clean
 
+### Sprint 15: Subscription Management on /dashboard/billing [COMPLETED]
+- **Research**: Razorpay has no self-serve customer portal — confirmed against the SDK. The API surface for in-house flows is `subscription.edit` (change `plan_id` + `schedule_change_at`), `subscription.cancel` (body includes `cancel_at_cycle_end`), and `client.invoice.all({"subscription_id": ...})` for invoice history. SDK method signatures verified directly (`Subscription.cancel`/`edit` take `data` dicts; `Invoice.all(data)`)
+- **Razorpay client** (`razorpay_client.py`): added `update_subscription(subscription_id, plan_id, schedule_change_at="now")`, `cancel_subscription(subscription_id, cancel_at_cycle_end=False)` (existing cancel signature preserved), and `list_subscription_invoices(subscription_id)` (newest first); existing `fetch_subscription` reused
+- **Schemas** (`schemas/billing.py`): `SubscriptionDetail` (`has_subscription` flag, plan/status, `current_start`/`current_end`, `next_charge_on`, `payment_method`, `cancel_at_cycle_end`, invoice list), `InvoiceRead`, `ChangePlanRequest/Response`, `CancelSubscriptionRequest/Response`
+- **New endpoints** (`billing.py`, all org-scoped, `_require_billing_enabled`):
+  - `GET /organizations/me/billing/subscription` — returns `has_subscription=false` for new signups with no `razorpay_subscription_id` (frontend shows trial/free state, no errors); otherwise fetches the Razorpay subscription and maps `plan_id` back to the plan key via `_plan_for_razorpay`; invoice history is **best-effort** (list failure doesn't fail the detail view)
+  - `POST /organizations/me/billing/subscription/change-plan` — validates plan + `schedule_change_at` ∈ {now, cycle_end}, calls `update_subscription`, reflects the new plan on the org immediately (Razorpay sends no plan-change webhook), audit log `billing.plan_changed`
+  - `POST /organizations/me/billing/subscription/cancel` — calls `cancel_subscription`; default `cancel_at_cycle_end=true` keeps the org **active** (access until the paid period ends; webhook `subscription.cancelled` flips enforcement at cycle end), immediate cancel (`false`) flags `plan_status="cancelled"` right away, audit log `billing.plan_cancelled`
+- **Frontend** (`/dashboard/billing`): current-plan card (name, price, renewal date, status incl. "cancelling at cycle end", payment method), invoice-history table, usage progress bars (tokens / chatbots / messages / knowledge sources vs plan limits with color shifts at 80% and over limit + overage cost notice), plan comparison grid with checkout-session upgrade flow for new subs and a "Switch (existing sub)" in-house change-plan flow (upgrade now / downgrade at cycle end), cancel-with-confirmation flow, and a clear **Trial / Free** state for orgs without a subscription. Warning banner + token card preserved
+- **Tests**: 10 new (subscription detail no-subscription / with-invoices / invoice-failure best-effort, change-plan success + unknown/free plan + no-subscription, cancel at-cycle-end keeps active + immediate flags cancelled + no-subscription, 503 when disabled)
+- **Total test suite**: 170 passing, 8 skipped (PostgreSQL-only RLS) — frontend build clean
+
 ---
 
 ## Phase V: In Progress / Planned
 - Multi-factor authentication (TOTP-based)
-- Advanced cost tracking and budget alerts per organization/chatbot (plan tiers/billing + usage-based overage done in Sprints 13–14; feature-flagged)
+- Advanced cost tracking and budget alerts per organization/chatbot (plan tiers/billing + usage-based overage + subscription management done in Sprints 13–15; feature-flagged)
 - Performance optimization: incremental sync, intelligent caching improvements
 - SDK generation for Python, JavaScript, Go (Python/JS done)
 - Real-time analytics dashboard updates (WebSocket-based; static/date-range charts done in Sprint 12)
