@@ -1,6 +1,7 @@
 import { useEffect, useState } from 'react';
 import { fetchArray, api } from '../../lib/api';
 import DeveloperLayout from '../../components/DeveloperLayout';
+import FeedbackWidget from '../../components/FeedbackWidget';
 
 export default function ApiTestPage() {
   const [chatbots, setChatbots] = useState<any[]>([]);
@@ -316,6 +317,13 @@ export default function ApiTestPage() {
                   <span className="font-medium text-gray-700">Response:</span>
                   <p className="mt-1 text-gray-900 bg-gray-50 p-3 rounded whitespace-pre-wrap">{chatbotTestResult.response}</p>
                 </div>
+              </div>
+              <div className="mt-4">
+                <FeedbackWidget
+                  context="chatbot_test"
+                  chatbotId={selectedChatbot}
+                  prompt="Did the test chatbot give you a useful answer?"
+                />
               </div>
             </div>
           )}

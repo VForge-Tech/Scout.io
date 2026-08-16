@@ -1,6 +1,7 @@
 import { useCallback, useEffect, useRef, useState } from 'react';
 import { api } from '../../lib/api';
 import DashboardLayout from '../../components/DashboardLayout';
+import FeedbackWidget from '../../components/FeedbackWidget';
 
 interface Chatbot {
   id: string;
@@ -99,6 +100,23 @@ export default function KnowledgeSourcesPage() {
   // Retry
   const [retrying, setRetrying] = useState<Record<string, boolean>>({});
 
+  // First successful sync -> prompt feedback once per source (persisted per session)
+  const [feedbackSource, setFeedbackSource] = useState<SourceRow | null>(null);
+  const promptedRef = useRef<Set<string>>(new Set(JSON.parse(
+    typeof window !== 'undefined' ? (sessionStorage.getItem('scout_feedback_prompted') || '[]') : '[]',
+  )));
+
+  const promptOnFirstSync = (rows: SourceRow[]) => {
+    const synced = rows.find(
+      (r) => r.sync_status === 'completed' && !promptedRef.current.has(r.id),
+    );
+    if (synced) {
+      promptedRef.current.add(synced.id);
+      sessionStorage.setItem('scout_feedback_prompted', JSON.stringify([...promptedRef.current]));
+      setFeedbackSource(synced);
+    }
+  };
+
   const fetchAll = useCallback(async () => {
     if (!mounted) return;
     try {
@@ -117,6 +135,7 @@ export default function KnowledgeSourcesPage() {
       }
       setSources(rows);
       setError(null);
+      promptOnFirstSync(rows);
     } catch (e: any) {
       setError(e.message || 'Failed to load knowledge sources');
     } finally {
@@ -251,6 +270,16 @@ export default function KnowledgeSourcesPage() {
       </div>
 
       {error && <div className="bg-red-50 text-red-700 px-4 py-3 rounded mb-6">{error}</div>}
+      {feedbackSource && (
+        <div className="mb-6">
+          <FeedbackWidget
+            context="source_sync"
+            sourceId={feedbackSource.id}
+            chatbotId={feedbackSource.chatbot_id || undefined}
+            prompt={`Your source "${feedbackSource.uri}" finished syncing. How did it go?`}
+          />
+        </div>
+      )}
       {loading && <p className="text-gray-500">Loading knowledge sources...</p>}
 
       {!loading && !error && (

@@ -17,9 +17,70 @@ interface Analytics {
   active_chatbots: number;
 }
 
-interface PlanInfo {
-  plan: string;
-  limits: Record<string, unknown>;
+interface OnboardingStep {
+  step: string;
+  label: string;
+  completed: boolean;
+}
+
+interface Checklist {
+  steps: OnboardingStep[];
+  completed_count: number;
+}
+
+const STEP_LINKS: Record<string, string> = {
+  create_chatbot: '/dashboard/chatbots',
+  add_knowledge_source: '/dashboard/knowledge-sources',
+  test_widget: '/developer/api-test',
+  invite_teammate: '/dashboard/team',
+};
+
+function OnboardingChecklist() {
+  const [checklist, setChecklist] = useState<Checklist | null>(null);
+
+  useEffect(() => {
+    api.get<Checklist>('/analytics/onboarding')
+      .then(setChecklist)
+      .catch(() => {});
+  }, []);
+
+  if (!checklist || checklist.completed_count >= checklist.steps.length) return null;
+
+  return (
+    <div className="bg-white rounded-lg shadow p-6 mb-8">
+      <h3 className="text-lg font-medium text-gray-900 mb-1">Get started</h3>
+      <p className="text-sm text-gray-500 mb-4">
+        Complete these steps to launch your first chatbot.
+      </p>
+      <div className="grid grid-cols-1 md:grid-cols-2 gap-3">
+        {checklist.steps.map((s) => (
+          <a
+            key={s.step}
+            href={STEP_LINKS[s.step] || '#'}
+            className={`flex items-center gap-3 p-3 rounded-lg border transition-colors ${
+              s.completed
+                ? 'bg-green-50 border-green-200'
+                : 'border-gray-200 hover:bg-gray-50'
+            }`}
+          >
+            <span
+              className={`w-5 h-5 rounded-full flex items-center justify-center text-xs shrink-0 ${
+                s.completed ? 'bg-green-500 text-white' : 'bg-gray-200 text-gray-500'
+              }`}
+            >
+              {s.completed ? '✓' : ''}
+            </span>
+            <span className={`text-sm ${s.completed ? 'text-green-700' : 'text-gray-800'}`}>
+              {s.label}
+            </span>
+          </a>
+        ))}
+      </div>
+      <p className="text-xs text-gray-400 mt-3">
+        {checklist.completed_count} of {checklist.steps.length} completed
+      </p>
+    </div>
+  );
 }
 
 export default function DashboardOverview() {
@@ -65,6 +126,8 @@ export default function DashboardOverview() {
               {planLabel} Plan
             </span>
           </div>
+
+          <OnboardingChecklist />
 
           <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-6 mb-8">
             <StatCard title="Chatbots" value={analytics?.total_chatbots ?? 0} subtitle={`${analytics?.active_chatbots ?? 0} active`} />

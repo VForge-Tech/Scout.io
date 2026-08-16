@@ -4,6 +4,7 @@ import Sidebar from './Sidebar';
 const adminItems = [
   { label: 'Organizations', href: '/admin/organizations', icon: '🏢' },
   { label: 'Platform Stats', href: '/admin', icon: '📊' },
+  { label: 'Onboarding & Feedback', href: '/admin/onboarding', icon: '🧭' },
   { label: 'Audit Logs', href: '/admin/audit-logs', icon: '📋' },
   { label: 'System Health', href: '/admin/system-health', icon: '🔍' },
   { label: 'Settings', href: '/admin/settings', icon: '⚙️' },
