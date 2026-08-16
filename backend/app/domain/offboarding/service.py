@@ -5,7 +5,7 @@ FK-safe child-before-parent order), its Qdrant vectors (and pgvector fallback
 rows when enabled), org-scoped Redis caches, and its uploaded source files
 under ``UPLOAD_DIR/<org_id>/``.
 
-Retention decision (documented in docs/offboarding.md):
+Retention decision (documented in docs/operations/security-and-compliance.md):
 
 - **Audit logs are purged** with the org's other rows (they are org data and
   the org is permanently leaving the platform), EXCEPT the offboarding

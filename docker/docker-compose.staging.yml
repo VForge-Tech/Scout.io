@@ -10,7 +10,7 @@
 # URLs directly as env vars — the backend falls back to these if a secret is
 # missing from Vault.
 #
-# Secrets to provision in the staging Vault (see docs/staging.md):
+# Secrets to provision in the staging Vault (see docs/operations/staging-deployment.md):
 #   secret/scout-io/staging/database_url
 #   secret/scout-io/staging/redis_url
 #   secret/scout-io/staging/qdrant_url

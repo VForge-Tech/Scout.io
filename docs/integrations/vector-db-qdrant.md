@@ -1,4 +1,10 @@
-# Cross-Encoder Reranking Service — Implementation Report
+# Vector DB & Retrieval (Qdrant, pgvector, Reranker)
+
+> This document merges the previous Cross-Encoder Reranking Service report into
+> the vector-db reference. For the retrieval architecture end to end, see the
+> Knowledge Engine section of `docs/architecture/system-architecture.md`.
+
+## Reranking service (merged from implementation report)
 
 ## Summary
 
@@ -81,7 +87,7 @@ keyword search, LLM provider fallback, in-memory memory stores).
     global flag controls default, empty rerank result keeps original order,
     fallback on `RerankerUnavailable`, fallback on arbitrary exception,
     `retrieve()` reranks after Qdrant search, `retrieve()` falls back on failure.
-- Backend full suite: **185 passed, 8 skipped** (up from 175 + 8).
+- Backend full suite at the time of this report: **185 passed, 8 skipped** (current baseline: 216 passed, 8 skipped).
 
 ## Retrieval precision: before/after
 

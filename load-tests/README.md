@@ -72,7 +72,7 @@ Groups:
 
 ## 4. Report
 
-Summarise the CSVs into `docs/load-testing-report.md` with:
+Summarise the CSVs into the load-testing report section of `docs/operations/monitoring-observability.md` with:
 
 - Environment (concurrency, ramp, MOCK_LLM, backend instance size)
 - Full-pipeline p50/p95/p99 at 1x vs 10x

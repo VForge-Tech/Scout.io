@@ -175,7 +175,7 @@
   - Optional secrets: openai_api_key, anthropic_api_key, together_api_key, gemini_api_key, azure_openai_api_key, webhook_secret
 - **Early initialization**: Secret manager initialized at module load in `app/main.py` with deployment environment detection
 - **Documentation**: `.env.example` files updated to document Vault path convention and remove secret placeholders
-- **Production setup guide**: `docs/Vault_Production_Setup.md` with step-by-step provisioning, initialization, unsealing, policy creation, AppRole auth, secret writing, and rotation procedures
+- **Production setup guide**: `docs/operations/security-and-compliance.md` (Vault section) with step-by-step provisioning, initialization, unsealing, policy creation, AppRole auth, secret writing, and rotation procedures
 - **All 92 tests pass** with env var fallback in test environment
 
 ### Sprint 11: Adversarial Security Testing & Hardening [COMPLETED]
@@ -239,7 +239,7 @@
 - **Keys via Vault**: `razorpay_key_id`, `razorpay_key_secret`, `razorpay_webhook_secret` pulled through the existing SecretManager (env fallback in dev); test-mode keys only, never hardcoded
 - **Feature flag**: `billing_enabled` (`BILLING_ENABLED`, default `false`). Off in testing/dev — plan limits not enforced (no-op), checkout/webhook endpoints return 503, frontend billing page shows a "Billing is disabled in this environment" notice. Enable `BILLING_ENABLED=true` in production.
 - **Frontend** (`/dashboard/billing`): current plan, usage vs limits cards, plan cards with Upgrade → redirect to Razorpay checkout (disabled when the flag is off)
-- **Docs**: `docs/Plans and Billing.md` — tiers/limits, Vault key provisioning, webhook registration, feature flag, live-mode checklist (KYC note)
+- **Docs**: `docs/integrations/billing-razorpay.md` — tiers/limits, Vault key provisioning, webhook registration, feature flag, live-mode checklist (KYC note)
 - **Tests**: 20 billing tests (checkout-session, signature rejection, all four webhook events, plan limit enforcement for chatbots/knowledge sources/messages, cancelled-downgrade, usage summary, disabled-flag 503 behavior)
 - **Total test suite**: 145 passing (142 + 3 flag tests), 8 skipped (PostgreSQL-only RLS)
 
@@ -254,7 +254,7 @@
 - **Billing endpoint**: `GET /organizations/me/billing` now returns `usage_billing` (current month record) and `limits.included_monthly_tokens`
 - **Frontend** (`/dashboard/billing`): warning banner, token usage card (used / included, overage + add-on vs invoice status)
 - **Infra**: `celery_billing_beat` + `celery_billing_worker` compose services; worker app includes both `billing_tasks` and `analytics_tasks`
-- **Docs**: `docs/Plans and Billing.md` — usage-based billing section (recording, aggregation, overage fallback, deployment)
+- **Docs**: `docs/integrations/billing-razorpay.md` — usage-based billing section (recording, aggregation, overage fallback, deployment)
 - **Tests**: 16 new tests (pricing math + model matching, aggregation create/upsert, Razorpay add-on report + failure fallback + no-subscription skip, soft-limit once-per-period + below-threshold, endpoint warning/usage_billing surface, pipeline LLMUsage recording incl. provider-usage capture, no-db skip)
 - **Total test suite**: 161 passing (145 + 16), 8 skipped (PostgreSQL-only RLS) — frontend build clean
 
@@ -278,8 +278,8 @@
   - `Frontend (vitest + typecheck)`: `npm ci` → `npm test` → `npm run typecheck`, npm cache keyed on `package-lock.json`
   - `Widget (vitest + typecheck)`: `npm ci` → `npm test` → `npm run lint`, npm cache keyed on `package-lock.json`
 - **Build workflow** (`.github/workflows/build.yml`): on push to `main` (after merge), builds and pushes `backend` / `frontend` / `widget` images to GitHub Container Registry (GHCR) tagged with the commit SHA + `latest`; Docker Buildx + `type=gha` layer caching per service; GHCR login via `GITHUB_TOKEN` (`packages: write`); image namespace lowercased for GHCR
-- **Branch protection**: `docs/CI-CD.md` documents the two workflows, the required-status-check settings for `main` (the three CI job names), and notes the only secrets needed are the built-in `GITHUB_TOKEN`
-- **No staging/prod deploys**: `deploy-staging.yml` intentionally not created — staging env (4.2: docker-compose.staging.yml, host, docs/staging.md) doesn't exist yet; production deploys stay manual/gated. Backup & DR (the Sprint 6 prerequisite) is now in place (Sprint 21: nightly S3 backups + restore runbook, `docs/disaster-recovery.md`), so an approval-gated production deploy workflow can now be added
+- **Branch protection**: `docs/operations/staging-deployment.md` (CI/CD section) documents the two workflows, the required-status-check settings for `main` (the three CI job names), and notes the only secrets needed are the built-in `GITHUB_TOKEN`
+- **No staging/prod deploys**: `deploy-staging.yml` intentionally not created — staging env (4.2: docker-compose.staging.yml, host, docs/operations/staging-deployment.md) doesn't exist yet; production deploys stay manual/gated. Backup & DR (the Sprint 6 prerequisite) is now in place (Sprint 21: nightly S3 backups + restore runbook, `docs/operations/disaster-recovery.md`), so an approval-gated production deploy workflow can now be added
 - **Verification**: 3 frontend + 2 widget vitest tests pass, both typechecks clean, frontend `next build` clean, backend pytest sanity passes; workflows validated as parseable YAML
 
 ### Sprint 17: Staging Environment + Dockerignore [COMPLETED]
@@ -291,7 +291,7 @@
 - **`docker-compose.staging.yml`**: based on `docker-compose.prod.yml` but fully self-contained — separate Postgres (`scout_staging` DB), Redis, Qdrant, and Vault instances with `staging_*` volumes so staging never touches production data. Backend runs `DEPLOYMENT_ENV=staging` (secrets from `secret/scout-io/staging/*` with env-var fallbacks since Vault isn't required for staging), `BILLING_ENABLED=true` against Razorpay test keys, GHCR image names (`ghcr.io/<namespace>/backend|frontend:latest|sha`) with source `build:` fallback. Celery worker/billing/beat services included. Nginx mounts the staging vhost; host ports default `8080`/`8443` so it can coexist with production
 - **`docker/nginx/nginx.staging.conf`**: staging-only virtual host (`staging.scout.io`), 80→443 redirect + TLS from `./nginx/ssl`, same proxy paths as prod (`/api/`, `/ws`, `/health`, `/docs`, `/redoc`, `/openapi.json`, `/`)
 - **Frontend Dockerfile**: now accepts `NEXT_PUBLIC_API_URL` / `NEXT_PUBLIC_WS_URL` as build args so the staging image is compiled against the staging API/WS URLs instead of localhost
-- **`docs/staging.md`**: end-to-end deploy (host provisioning, `docker/.env`, TLS certs, staging Vault secret provisioning incl. Razorpay test keys, `pull`/`up -d`, migrations) plus **reset/seed procedure** (`down -v --remove-orphans` wipes all `staging_*` volumes → re-up → `alembic upgrade head` → `scripts/seed_test_data.py`) and isolation guarantees
+- **`docs/operations/staging-deployment.md`**: end-to-end deploy (host provisioning, `docker/.env`, TLS certs, staging Vault secret provisioning incl. Razorpay test keys, `pull`/`up -d`, migrations) plus **reset/seed procedure** (`down -v --remove-orphans` wipes all `staging_*` volumes → re-up → `alembic upgrade head` → `scripts/seed_test_data.py`) and isolation guarantees
 - **Compose validation**: `docker compose -f docker-compose.staging.yml config` passes (also fixed a latent malformed `depends_on` list+condition mix present in prod.yml)
 
 ### Sprint 18: Observability — Metrics, Logs & Alerting [COMPLETED]
@@ -303,7 +303,7 @@
 - **Alertmanager → Slack** (`docker/alertmanager/alertmanager.yml` + `template.tmpl`): routes each alert class to Slack `#alerts` with title/text templates + Grafana dashboard links from alert annotations; webhook injected via `SLACK_WEBHOOK_URL` → written to `slack_api_url_file` at startup (Alertmanager does **not** expand `${VAR}` in config — confirmed empirically); PagerDuty swap documented (same receiver-chain pattern)
 - **Grafana provisioning** (`docker/grafana/provisioning/datasources` + 4 dashboards with fixed UIDs matching the alert links): Scout Requests (`scout-requests`: RPS/endpoint, status mix, p50/p95, 5xx rate), Scout Celery (`scout-celery`: queue depth, growth, task failure rate), Scout Dependency Health (`scout-dependencies`: UP/DOWN per service), Scout LLM Providers (`scout-llm`: fallback rate/share)
 - **Config validation**: prometheus + 5 rules OK (`promtool`), alertmanager config loads cleanly with the webhook file, loki starts and listens on 3100, promtail config parses (`-dry-run`), `docker compose -f docker-compose.yml -f docker-compose.prod.yml --profile full config` passes
-- **Docs**: `docs/observability.md` — stack overview, data flow, the trace_id→Grafana link pattern (with example JSON log), alert rules table, Slack setup, PagerDuty swap, dashboard list, validation commands
+- **Docs**: `docs/operations/monitoring-observability.md` — stack overview, data flow, the trace_id→Grafana link pattern (with example JSON log), alert rules table, Slack setup, PagerDuty swap, dashboard list, validation commands
 - **Tests**: full suite re-run after instrumentation — **171 passing, 8 skipped**; `/metrics` endpoint verified live (200, all metric families present, counter incremented on real requests, `X-Trace-ID` header set)
 
 ### Sprint 19: Load-Testing Suite [COMPLETED]
@@ -314,7 +314,7 @@
 - **`load-tests/` suite** (Locust): `requirements.txt`, `README.md`, `common.py` (seed-state loading, X-Pipeline-Timings parsing, per-stage Locust events, bursty/normal org pool split), `seed.py` (creates orgs/users/chatbots/widget sessions/knowledge sources + pre-minted JWTs directly in the backend DB, writes `seed_state.json`), `widget_chat_locustfile.py` (multi-org concurrent chat, bursty-vs-normal starvation scenario, 1x→10x `LoadTestShape` ramp, per-stage percentile capture), `ingestion_locustfile.py` (create source → dispatch sync → poll to completion)
 - **Verified end-to-end** against local Docker infra (Postgres 16, Redis 7, Qdrant) with `MOCK_LLM=true` and a real Celery worker: widget smoke at ~72 users shows server-side pipeline p95 ≈ 200 ms (dominated by the ~120 ms mock LLM) while client-observed p95 ≈ 31 s — **first bottleneck is the single uvicorn worker threadpool**, not the pipeline, Postgres pool, or Qdrant; ingestion smoke (6 users, worker concurrency 2) ran 38 create/dispatch cycles + 126 polls with **0 failures** and all sources `completed`
 - **Migration fix**: `alembic/versions/0006_rls_policies.py` `upgrade()` created a `messages` RLS policy referencing a non-existent `organization_id` column then created a duplicate policy — now skips `messages` in the generic loop (no org column; handled by `_create_messages_rls`); fresh `alembic upgrade head` verified against a clean DB
-- **Docs**: `docs/load-testing-report.md` (methodology, per-stage p50/p95 tables, starvation result, ingestion throughput, first-bottleneck analysis + scaling recommendations: scale API workers first, then Postgres pool, then Celery concurrency) and `load-tests/README.md` (seed + run instructions)
+- **Docs**: `docs/operations/monitoring-observability.md` (load-testing report section: methodology, per-stage p50/p95 tables, starvation result, ingestion throughput, first-bottleneck analysis + scaling recommendations: scale API workers first, then Postgres pool, then Celery concurrency) and `load-tests/README.md` (seed + run instructions)
 
 ### Sprint 20: Cross-Encoder Reranking Service [COMPLETED]
 - **`services/reranker/`** standalone FastAPI service: `POST /rerank` (body `{query, chunks[{id,text,score}], top_k}` → reordered `results` with `rerank_score`, plus `elapsed_ms`), `GET /health`, `GET /ready`; loads `cross-encoder/ms-marco-MiniLM-L-6-v2` (CPU) lazily and warms on startup; `Dockerfile` (python:3.11-slim, port 8082, `/ready` healthcheck), `requirements.txt`, `.dockerignore`
@@ -324,7 +324,7 @@
 - **Graceful fallback**: any reranker failure (unreachable/timeout/5xx/malformed response) logs a warning, increments the new `scout_reranker_fallback_triggers_total` counter, and returns Qdrant's original similarity ordering — a reranker outage degrades to single-stage retrieval, never errors the request (existing "degrade, never fail" philosophy)
 - **Tests**: `services/reranker/tests/test_main.py` (5, mocked encoder — health, reorder, top_k, empty validation, ready) + `backend/tests/test_reranker.py` (10: client retry/reorder/error, engine rerank/merge/flag control/fallback paths); fixed `QdrantStore.ensure_collection()` to catch `ValueError` too (in-process/local Qdrant clients raise it for missing collections, not just `UnexpectedResponse`). Full backend suite **185 passing, 8 skipped**
 - **Precision measurement** (`backend/scripts/eval_reranker.py`): constructed 36-chunk product/support KB + 36 paraphrased queries with ground truth; real embeddings (`all-MiniLM-L6-v2`) via a local `EmbeddingService`-compatible stand-in and in-process Qdrant, reranker run against the real service. MRR@K 0.431→0.458, nDCG@3 0.417→0.463, nDCG@5 0.439→0.463. Key finding: dominant failure mode is **recall** (relevant chunk absent from candidate pool), which reranking can't fix — widening `reranker_max_candidates` is the first lever for further gains
-- **Docs**: `docs/reranker-report.md` (components, feature flags, fallback behaviour, precision table + findings, run instructions)
+- **Docs**: `docs/integrations/vector-db-qdrant.md` (components, feature flags, fallback behaviour, precision table + findings, run instructions)
 
 ---
 
@@ -335,7 +335,7 @@
 - **Restore** (`docker/backup/restore.sh` + `scripts/restore.sh` host wrapper): resolves `--latest` or `--timestamp <STAMP>`, downloads objects, stops/removes stack and **wipes `postgres_data` + `qdrant_data` volumes** (keeps compose network alive since the restore container is attached to it — deliberately not `compose down`), starts postgres+qdrant, `pg_restore --clean --no-owner`, then Qdrant snapshot recovery. Key Qdrant API discoveries that make recovery work: it is **`PUT /collections/{c}/snapshots/recover`** (not POST), the snapshot file must live under the container's **`/qdrant/snapshots`** dir (not storage), and recovery **refuses to overwrite an existing collection** — delete the target collection first. `COMPOSE_FILE` accepts a space-separated `-f` list so layered stacks (base `docker-compose.yml` + prod overlay) can be restored; the `scripts/restore.sh` wrapper defaults to the production base+prod layered stack
 - **Alembic handling**: restore runs `alembic upgrade head` (applies any migrations newer than the backup) only when the compose file has a `backend` service — skipped in scratch/DR test environments
 - **Validated end-to-end** against `docker/docker-compose.scratch.yml` (Postgres + Qdrant + MinIO + backup, project `scouttest`): seeded 3 orgs/3 messages + 3-point Qdrant collection, ran a real backup, tore everything down, restored from `--latest`, and verified — Postgres orgs=3/msgs=3, Qdrant points_count=3 with identical payloads, and a search smoke test returns the right doc at score 1.0. **Measured RTO ≈ 22 s** (download → wipe → pg_restore → qdrant recover → full stack up)
-- **Docs**: `docs/disaster-recovery.md` runbook (architecture, exact volume locations from compose files, incident procedure, verification steps, expected RTO/RPO, reproducible scratch-env DR test procedure)
+- **Docs**: `docs/operations/disaster-recovery.md` runbook (architecture, exact volume locations from compose files, incident procedure, verification steps, expected RTO/RPO, reproducible scratch-env DR test procedure)
 
 ### Sprint 22: Org Offboarding (Permanent Data Deletion) [COMPLETED]
 - **Two-step confirmation flow** (platform-admin only): `POST /admin/organizations/{org_id}/offboard` returns a deletion **preview** (per-table Postgres counts, Qdrant/pgvector points, Redis cache counts, upload files/bytes) + a signed **confirmation token** (JWT `type=offboard_confirm`, bound to org+admin, 15 min TTL, deletes nothing); `POST /admin/organizations/{org_id}/offboard/confirm` with the token verifies it and executes the purge, returning a completion report
@@ -343,7 +343,7 @@
 - **Vector purge**: `count_organization_chunks`/`delete_organization_chunks` on Qdrant collection (payload `organization_id` filter) and pgvector fallback rows when enabled
 - **Redis purge**: org memory (`org_config:*`/`org_policies:*`), session history keys collected from DB first, knowledge cache (`knowledge_cache:*` scanned + payload-matched on org id), and the `opt_cache:*` namespace evicted wholesale (md5-hashed keys, no org marker, short TTL — rationale in code)
 - **Uploads purge**: `shutil.rmtree(UPLOAD_DIR/<org_id>/)` with file/byte counts
-- **Audit-log retention decision (documented in `docs/offboarding.md`)**: org-scoped audit logs ARE purged (org data), but the offboarding op is written first as a platform-level proof (`organization_id`/`user_id` NULL, ids in `details`) that survives the purge as immutable proof; `usage_billing_records` are deleted too (NOT NULL FK to organizations blocks retaining), so financial settlement must precede offboarding
+- **Audit-log retention decision (documented in `docs/operations/security-and-compliance.md`, Offboarding section)**: org-scoped audit logs ARE purged (org data), but the offboarding op is written first as a platform-level proof (`organization_id`/`user_id` NULL, ids in `details`) that survives the purge as immutable proof; `usage_billing_records` are deleted too (NOT NULL FK to organizations blocks retaining), so financial settlement must precede offboarding
 - **Tests**: `backend/tests/test_offboarding.py` — 10 tests (service purge of every table, audit-proof survival, qdrant/redis/uploads mocks, preview-without-delete, token roundtrip/rejection, two-step endpoint flow, non-admin 403). Full suite: **195 passed, 8 skipped** (up from 185/8)
 
 ### Sprint 23: TOTP Multi-Factor Authentication [COMPLETED]
@@ -374,3 +374,1383 @@
 - Multi-region deployment support
 - Horizontal scaling for Celery workers
 - Plugin/extension system for custom knowledge connectors
+
+---
+
+## Product requirements document (merged)
+
+> The following section was merged from `docs/PRD.md`.
+
+# PRODUCT REQUIREMENTS DOCUMENT (PRD) 
+
+## Project Information 
+
+|Field|Value|
+|---|---|
+|Project Name|Scout.io|
+|Product Type<br>|AI Knowledge Infrastructure<br>Platform|
+|Primary Ofering|Organization-centric AI Chatbot<br>Infrastructure|
+|MVP Focus|Website-based AI Chatbots|
+|Architecture|Multi-tenant & Modular<br>|
+|Deployment Strategy|Cloud-frst with Hybrid Deployment<br>Readiness|
+|Target Users|Organizations, Developers and<br>Customers|
+
+
+
+## Problem Statement 
+
+Modern businesses are increasingly establishing their digital presence through websites and web applications to provide information, services, and support to their customers. However, most organizations encounter one or more of the following challenges while attempting to provide intelligent customer interactions. 
+
+### Existing Challenges 
+
+#### _Challenge 1: High Development Complexity_ 
+
+Building intelligent chatbot systems requires organizations to manage: 
+
+- AI integrations 
+
+- Multiple LLM providers 
+
+- Knowledge management 
+
+- Data synchronization 
+
+- Response validations 
+
+- Session management 
+
+- Security configurations 
+
+- Analytics infrastructure 
+
+This significantly increases development complexity and maintenance overhead. 
+
+_Challenge 2: Vendor Lock-in_ 
+
+Many existing chatbot solutions tightly couple organizations with: 
+
+- Specific AI providers 
+
+- Specific cloud providers 
+
+- Proprietary infrastructures 
+
+- Closed ecosystems 
+
+Organizations often lose flexibility once integrations are completed. 
+
+#### _Challenge 3: Knowledge Management Challenges_ 
+
+Organizations possess information distributed across multiple sources such as: 
+
+- Websites 
+
+- Documentation 
+
+- Databases 
+
+- APIs 
+
+- Knowledge repositories 
+
+- Frequently Asked Questions 
+
+Managing and synchronizing this information while maintaining consistency becomes increasingly difficult. 
+
+_Challenge 4: Limited Configurability_ 
+
+Most chatbot solutions provide limited control over: 
+
+- Response behaviours 
+
+- Security policies 
+
+- Session management 
+
+- Data retention 
+
+- Knowledge constraints 
+
+- AI configurations 
+
+Organizations require significantly greater flexibility without increasing engineering complexity. 
+
+_Challenge 5: Data Ownership Concerns_ 
+
+Organizations often hesitate to: 
+
+- Share confidential information. 
+
+- Migrate their complete databases. 
+
+- Store proprietary knowledge externally. 
+
+Maintaining ownership and control over organizational knowledge remains an important concern. 
+
+#### _Challenge 6: Reliability Issues_ 
+
+AI systems frequently suffer from: 
+
+- Hallucinations 
+
+- Provider failures 
+
+- Knowledge inconsistencies 
+
+- Service interruptions 
+
+- Poor response validation mechanisms 
+
+Organizations require intelligent fallback mechanisms and graceful degradation strategies. 
+
+## Proposed Solution 
+
+Scout.io addresses these challenges by providing an organization-centric AI infrastructure platform that enables organizations to securely expose their knowledge through configurable chatbot experiences. 
+
+Scout.io provides: 
+
+- Multi-chatbot management. 
+
+- Multiple knowledge source support. 
+
+- Intelligent AI routing. 
+
+- Multi-provider support. 
+
+- Response validation mechanisms. 
+
+- Synchronization workflows. 
+
+- Configurable response behaviours. 
+
+- Hybrid deployment capabilities. 
+
+- Graceful degradation mechanisms. 
+
+- Organization-level data ownership. 
+
+Organizations are provided with intelligent abstractions rather than implementation complexities. 
+
+## Product Vision 
+
+To become an extensible, secure, configurable, and provider-independent AI Knowledge Infrastructure Platform that enables organizations to intelligently expose their knowledge through AI-powered experiences. 
+
+Scout.io prioritizes: 
+
+- Security 
+
+- Stability 
+
+- Scalability 
+
+- Maintainability 
+
+- Flexibility 
+
+- Simplicity 
+
+Website chatbots represent the first capability offered by the platform and not the final destination of the product. 
+
+## Product Goals 
+
+### Primary Goals 
+
+- Reduce chatbot development complexity. 
+
+- Provide provider-independent AI infrastructures. 
+
+- Enable multiple chatbot management. 
+
+- Maintain organization-level data ownership. 
+
+- Ensure configurable AI behaviours. 
+
+- Provide production-grade reliability. 
+
+### Secondary Goals 
+
+- Minimize engineering efforts for organizations. 
+
+- Support multiple deployment models. 
+
+- Maintain long-term extensibility. 
+
+- Enable intelligent AI orchestration. 
+
+- Preserve architectural simplicity. 
+
+## Stakeholders 
+
+### Platform Administrators 
+
+Responsibilities include: 
+
+- Platform management. 
+
+- Infrastructure maintenance. 
+
+- System monitoring. 
+
+- Tenant management. 
+
+- Security management. 
+
+### Organizations 
+
+Responsibilities include: 
+
+- Creating chatbots. 
+
+- Managing configurations. 
+
+- Managing knowledge sources. 
+
+- Defining chatbot policies. 
+
+- Managing analytics. 
+
+### Developers 
+
+Responsibilities include: 
+
+- Widget integrations. 
+
+- API integrations. 
+
+- Dashboard configurations. 
+
+- Future SDK integrations. 
+
+### Customers 
+
+Responsibilities include: 
+
+- Chatbot interactions. 
+
+- Feedback submissions. 
+
+- Session participation. 
+
+Customers will never have access to: 
+
+- AI providers. 
+
+- Internal configurations. 
+
+- Knowledge metadata. 
+
+- Organizational policies. 
+
+- Response generation workflows. 
+
+## Functional Requirements 
+
+### Organization Management 
+
+Organizations should be able to: 
+
+- Create accounts. 
+
+- Manage chatbots. 
+
+- Configure policies. 
+
+- Configure response behaviours. 
+
+- Manage sessions. 
+
+- Manage analytics. 
+
+### Chatbot Management 
+
+Organizations should be able to: 
+
+- Create multiple chatbots. 
+
+- Configure chatbot behaviours. 
+
+- Configure storage policies. 
+
+- Configure synchronization mechanisms. 
+
+- Configure AI policies. 
+
+Each chatbot should remain independently configurable. 
+
+### Knowledge Source Management 
+
+Organizations should be able to connect: 
+
+- Websites 
+
+- Documents 
+
+- APIs 
+
+- Databases 
+
+- Code repositories 
+
+- Future integrations 
+
+Organizations should remain the owners of their knowledge sources. 
+
+### AI Management 
+
+Organizations should be able to configure: 
+
+- Fast mode 
+
+- Balanced mode 
+
+- High Accuracy mode 
+
+- Cost Efficient mode 
+
+- Custom behaviours 
+
+Organizations will configure behaviours rather than AI providers. 
+
+Model selection remains the responsibility of Scout.io. 
+
+### Session Management 
+
+Organizations should be able to configure: 
+
+- Session retention policies. 
+
+- Storage durations. 
+
+- Session analytics. 
+
+- Customer interaction policies. 
+
+Examples include: 
+
+- No storage 
+
+- Seven days 
+
+- Thirty days 
+
+- Ninety days 
+
+- Custom configurations 
+
+### Analytics Management 
+
+Organizations should be be able to monitor: 
+
+- Response statistics. 
+
+- Session statistics. 
+
+- Performance statistics. 
+
+- Token utilization. 
+
+- Synchronization statistics. 
+
+- Feedback statistics. 
+
+Optional analytics may include: 
+
+- Confidence scores. 
+
+- Retrieved contexts. 
+
+- Source mappings. 
+
+ Validation statistics. 
+
+### Response Policies 
+
+Organizations should be able to configure: 
+
+#### _Strict Mode_ 
+
+- Source-only responses. 
+
+#### _Balanced Mode_ 
+
+- Configurable general knowledge support. 
+
+#### _Creative Mode_ 
+
+- Broader AI utilization. 
+
+_Custom Mode_ 
+
+Organizations determine: 
+
+- Allowed domains. 
+
+- Restricted domains. 
+
+- Behaviour policies. 
+
+- Security policies. 
+
+## Non-Functional Requirements 
+
+Scout.io must satisfy the following requirements. 
+
+### Security Requirements 
+
+The platform must: 
+
+- Enforce organization-level isolation. 
+
+- Prevent unauthorized access. 
+
+- Prevent confidential information leakage. 
+
+- Validate generated responses. 
+
+- Secure organizational configurations. 
+
+### Performance Requirements 
+
+The platform should: 
+
+- Maintain low response latency. 
+
+- Efficiently manage synchronization workflows. 
+
+- Optimize token utilization. 
+
+ Support concurrent chatbot sessions. 
+
+### Scalability Requirements 
+
+The platform must support: 
+
+- Multiple organizations. 
+
+- Multiple chatbots. 
+
+- Horizontal scaling. 
+
+- Hybrid deployments. 
+
+- Future distributed architectures. 
+
+### Maintainability Requirements 
+
+The architecture must remain: 
+
+- Modular. 
+
+- Extensible. 
+
+- Provider-independent. 
+
+- Contributor friendly. 
+
+## Response Workflow Requirements 
+
+Every response must pass through: 
+
+Question 
+
+| Intent Detection 
+
+| Policy Validation 
+
+| Security Validation 
+
+- | Knowledge Retrieval 
+
+| Context Optimization 
+
+- | AI Routing 
+
+- | Response Generation 
+
+- | 
+
+Response Validation 
+
+| Response Sanitization 
+
+| 
+
+Analytics Logging 
+
+| Final Response 
+
+No response should bypass this workflow. 
+
+## AI Requirements 
+
+The platform must support: 
+
+- Multiple LLM providers. 
+
+- Open-source fallback models. 
+
+- Intelligent routing mechanisms. 
+
+- Provider abstractions. 
+
+- Future provider integrations. 
+
+Customers must never know: 
+
+- Which model generated responses. 
+
+- Which provider was utilized. 
+
+- Internal response generation workflows. 
+
+## Knowledge Requirements 
+
+The platform must support: 
+
+- Multiple knowledge sources. 
+
+- Synchronization mechanisms. 
+
+- Embedding management. 
+
+- Context retrieval. 
+
+- Future knowledge integrations. 
+
+Knowledge management should remain configurable and extensible. 
+
+## Deployment Requirements 
+
+The MVP must support: 
+
+- Website integrations. 
+
+- Cloud deployments. 
+
+- Containerized environments. 
+
+Future support includes: 
+
+- Self-hosted deployments. 
+
+- Hybrid deployments. 
+
+- Enterprise deployments. 
+
+## Fallback Requirements 
+
+Scout.io must implement graceful degradation mechanisms. 
+
+Examples include: 
+
+Primary Provider | Failure | Secondary Provider | Failure | Scout Open Models | Failure | Graceful Response 
+
+Examples of graceful responses include: 
+
+- Service unavailable notifications. 
+
+- Alternative responses. 
+
+- Retry mechanisms. 
+
+## Open-source Philosophy 
+
+Scout.io intentionally adopts existing and battle-tested open-source ecosystems whenever feasible. 
+
+Examples include: 
+
+- AI abstractions 
+
+- Knowledge retrieval systems 
+
+- Synchronization frameworks 
+
+- Monitoring solutions 
+
+- Authentication systems 
+
+Engineering efforts should primarily focus upon solving problems unique to Scout.io rather than rebuilding mature infrastructures. 
+
+## MVP Scope 
+
+The MVP includes: 
+
+- Multi-tenant architecture. 
+
+- Multiple chatbot support. 
+
+- Website integrations. 
+
+- Multiple knowledge sources. 
+
+- Organization dashboards. 
+
+- Session management. 
+
+- Analytics. 
+
+- AI routing mechanisms. 
+
+- Response validations. 
+
+- Synchronization workflows. 
+
+- Open-source fallback models. 
+
+- Configurable response policies. 
+
+- Hybrid deployment readiness. 
+
+## Future Scope 
+
+Future capabilities include: 
+
+- Voice interfaces. 
+
+- Multi-modal support. 
+
+- Enterprise integrations. 
+
+- Agentic workflows. 
+
+- Mobile SDKs. 
+
+- White-label deployments. 
+
+- Multi-language capabilities. 
+
+- Advanced analytics. 
+
+- GPU deployments. 
+
+- Distributed architectures. 
+
+Future capabilities should extend existing architectural boundaries without introducing breaking changes. 
+
+## Success Metrics 
+
+The MVP shall be considered successful if it satisfies the following objectives: 
+
+### Product Metrics 
+
+- Reliable chatbot responses. 
+
+- Stable synchronization workflows. 
+
+- Configurable organizational policies. 
+
+- Successful multi-provider integrations. 
+
+- Graceful degradation support. 
+
+### Technical Metrics 
+
+- High system availability. 
+
+- Efficient response generation. 
+
+- Reliable fallback mechanisms. 
+
+- Organization-level isolation. 
+
+- Maintainable codebases. 
+
+### User Metrics 
+
+Organizations should be able to: 
+
+- Configure chatbots without implementation complexity. 
+
+- Manage knowledge sources efficiently. 
+
+- Maintain ownership of their organizational data. 
+
+- Deploy intelligent chatbot experiences with minimal effort. 
+
+## Product Constraints 
+
+The following constraints must remain non-negotiable: 
+
+- Security takes precedence over feature additions. 
+
+- Organizations remain the owners of their data. 
+
+- Provider implementations remain abstracted. 
+
+- Components remain independently replaceable. 
+
+- Multi-tenancy remains mandatory. 
+
+- Responses must pass through validation mechanisms. 
+
+- Graceful degradation mechanisms should exist wherever feasible. 
+
+ Architectural simplicity should be preferred over unnecessary complexity. 
+
+## Product Philosophy 
+
+Scout.io is not intended to become another chatbot builder. It is designed to become an extensible AI Knowledge Infrastructure Platform that enables organizations to securely, intelligently, and efficiently expose their knowledge through configurable AI experiences. 
+
+Its success will not be measured by the number of features implemented, but rather by its ability to provide: 
+
+- Reliable AI infrastructures. 
+
+- Secure knowledge management. 
+
+- Provider-independent architectures. 
+
+- Organization-centric experiences. 
+
+- Long-term maintainability. 
+
+This Product Requirements Document serves as the authoritative product specification for Scout.io and defines the functional, non-functional, architectural, and business requirements that all subsequent engineering decisions must inherit and preserve. 
+
+
+---
+
+## Phases (merged)
+
+> The following section was merged from `docs/Phases.md`.
+
+# PHASES 
+
+## Overview 
+
+This document defines the implementation roadmap for Scout.io. The project is intentionally divided according to product capabilities rather than technological boundaries. 
+
+Every phase should satisfy the following objectives: 
+
+- Produce usable deliverables. 
+
+- Preserve architectural consistency. 
+
+- Remain independently testable. 
+
+- Preserve future extensibility. 
+
+- Maintain security-first principles. 
+
+Each phase builds incrementally upon the previous phase without introducing breaking architectural changes. 
+
+## Project Roadmap 
+
+Scout.io 
+
+| Phase I Foundation Layer | Phase II Core Platform Layer | Phase III Intelligence Layer | Phase IV Production Layer | Phase V Scale & Future | Future Capabilities 
+
+## Phase I 
+
+# Foundation Layer 
+
+### Objectives 
+
+The objective of Phase I is to establish the foundational infrastructure required throughout Scout.io. 
+
+### Deliverables 
+
+_Project Infrastructure_ 
+
+- Repository setup. 
+
+- Project architecture. 
+
+- Development environments. 
+
+- Configuration management. 
+
+- Logging mechanisms. 
+
+- Environment management. 
+
+#### _Backend Foundation_ 
+
+- Modular monolith architecture. 
+
+- Project structure implementation. 
+
+- API foundations. 
+
+- Middleware implementations. 
+
+- Service abstractions. 
+
+#### _Database Foundation_ 
+
+- Multi-tenancy architecture. 
+
+- Database schemas. 
+
+- Organizational models. 
+
+- Session models. 
+
+- Policy models. 
+
+- Analytics models. 
+
+#### _Security Foundation_ 
+
+- JWT authentication. 
+
+- Authorization mechanisms. 
+
+- Organization isolation. 
+
+- Security middleware. 
+
+- Input validations. 
+
+_Scout Core Foundation_ 
+
+Implement: 
+
+- Policy Layer 
+
+- Security Layer 
+
+- Session Layer 
+
+- Knowledge Layer abstractions 
+
+- AI Layer abstractions 
+
+### Completion Criteria 
+
+Phase I shall be considered complete if: 
+
+- Organizations can register. 
+
+- Authentication workflows function correctly. 
+
+- Multi-tenancy is operational. 
+
+- Scout Core abstractions are implemented. 
+
+- Security mechanisms are functioning. 
+
+## Phase II 
+
+# Core Platform Layer 
+
+### Objectives 
+
+The objective of Phase II is to make Scout.io usable by organizations. 
+
+### Deliverables 
+
+_Organization Dashboard_ 
+
+Implement: 
+
+- Organization management. 
+
+- Dashboard interfaces. 
+
+- Chatbot management. 
+
+- Policy configurations. 
+
+- Session configurations. 
+
+_Chatbot Management_ 
+
+Support: 
+
+- Multiple chatbots. 
+
+- Independent configurations. 
+
+- Independent policies. 
+
+- Independent analytics. 
+
+#### _Knowledge Source Management_ 
+
+Implement support for: 
+
+- Websites. 
+
+- PDFs. 
+
+- Markdown files. 
+
+- TXT files. 
+
+_Synchronization Workflows_ 
+
+Implement: 
+
+- Manual synchronizations. 
+
+- Scheduled synchronizations. 
+
+- Metadata management. 
+
+_Widget Development_ 
+
+Implement: 
+
+- Scout Widget. 
+
+- Theme configurations. 
+
+- Website integrations. 
+
+- Session handling. 
+
+### Completion Criteria 
+
+Organizations should be capable of: 
+
+- Creating chatbots. 
+
+- Connecting knowledge sources. 
+
+- Configuring behaviours. 
+
+- Deploying widgets. 
+
+- Managing sessions. 
+
+At the completion of Phase II, Scout.io becomes a usable product. 
+
+## Phase III 
+
+# Intelligence Layer 
+
+### Objectives 
+
+The objective of Phase III is to implement Scout Core’s intelligence capabilities. 
+
+### Deliverables 
+
+#### _Knowledge Layer_ 
+
+#### Implement: 
+
+- Embedding generation. 
+
+- Retrieval workflows. 
+
+- Knowledge indexing. 
+
+- Context management. 
+
+#### _AI Layer_ 
+
+#### Implement: 
+
+- AI routing. 
+
+- Provider abstractions. 
+
+- Multi-model support. 
+
+- Open-source fallback models. 
+
+_Validation Layer_ 
+
+#### Implement: 
+
+- Context validations. 
+
+- Policy validations. 
+
+- Response validations. 
+
+- Security validations. 
+
+_Optimization Layer_ 
+
+#### Implement: 
+
+- Retrieval optimizations. 
+
+- Cache management. 
+
+- Token optimizations. 
+
+- Performance improvements. 
+
+_Memory Framework_ 
+
+#### Implement: 
+
+- Session memory. 
+
+- Knowledge memory. 
+
+- Organizational memory. 
+
+- Optimization memory. 
+
+### Completion Criteria 
+
+Scout Core should support: 
+
+- Context-aware responses. 
+
+- Multi-provider support. 
+
+- Retrieval optimizations. 
+
+- Graceful fallback mechanisms. 
+
+- Token optimizations. 
+
+Phase III transforms Scout.io into an intelligent AI Knowledge Infrastructure Platform. 
+
+## Phase IV 
+
+# Production Layer 
+
+### Objectives 
+
+The objective of Phase IV is to prepare Scout.io for production deployments. 
+
+### Deliverables 
+
+#### _Analytics Framework_ 
+
+#### Implement: 
+
+- Organizational analytics. 
+
+- Session analytics. 
+
+- Retrieval analytics. 
+
+- Synchronization analytics. 
+
+- Performance analytics. 
+
+_Deployment Framework_ 
+
+#### Implement: 
+
+- Widget deployments. 
+
+- Production configurations. 
+
+- Deployment validations. 
+
+- Integration workflows. 
+
+_Security Enhancements_ 
+
+#### Implement: 
+
+- Advanced rate limiting. 
+
+- Session protections. 
+
+- Response sanitization. 
+
+- Audit mechanisms. 
+
+#### _Performance Improvements_ 
+
+Implement: 
+
+- Background workers. 
+
+- Queue management. 
+
+- Intelligent caching. 
+
+- Incremental synchronizations. 
+
+_Monitoring_ 
+
+Implement: 
+
+- Service monitoring. 
+
+- Performance monitoring. 
+
+- Failure monitoring. 
+
+- Synchronization monitoring. 
+
+### Completion Criteria 
+
+Scout.io should support: 
+
+- Production deployments. 
+
+- Organizational monitoring. 
+
+- Secure integrations. 
+
+- Intelligent synchronizations. 
+
+- Performance optimizations. 
+
+## Phase V 
+
+# Scale & Future Layer 
+
+### Objectives 
+
+The objective of Phase V is to introduce scalability and future capabilities. 
+
+### Deliverables 
+
+_Future Knowledge Sources_ 
+
+Support: 
+
+- APIs. 
+
+- Databases. 
+
+- Git repositories. 
+
+- Enterprise integrations. 
+
+####  Future connectors. 
+
+_Deployment Extensions_ 
+
+Implement: 
+
+- SDK integrations. 
+
+- Hybrid deployments. 
+
+- Self-hosting capabilities. 
+
+- Enterprise deployments. 
+
+_Advanced Intelligence_ 
+
+Implement: 
+
+- Advanced optimizations. 
+
+- Multi-modal capabilities. 
+
+- Voice integrations. 
+
+- Agentic workflows. 
+
+_Scalability Improvements_ 
+
+Implement: 
+
+- Horizontal scaling. 
+
+- Distributed architectures. 
+
+- Future microservices. 
+
+- Multi-region deployments. 
+
+### Completion Criteria 
+
+Scout.io should support: 
+
+- Enterprise capabilities. 
+
+- Future integrations. 
+
+- Advanced deployments. 
+
+- Distributed architectures. 
+
+- Long-term extensibility. 
+
+## Suggested MVP Scope 
+
+The MVP intentionally excludes: 
+
+- Voice interfaces. 
+
+- Multi-modal capabilities. 
+
+- Enterprise deployments. 
+
+- Agentic workflows. 
+
+- Mobile applications. 
+
+- Distributed architectures. 
+
+### MVP Includes 
+
+Organizations 
+
+##### ↓ 
+
+Multiple Chatbots 
+
+##### ↓ 
+
+Website Sources 
+
+##### ↓ 
+
+Knowledge Retrieval 
+
+##### ↓ 
+
+AI Routing 
+
+##### ↓ 
+
+Scout Widget 
+
+##### ↓ 
+
+Analytics 
+
+##### ↓ 
+
+Production Deployment 
+
+##### ↓ 
+
+Organizations Ready 
+
+The MVP should remain intentionally minimal and stable. 
+
+## Suggested Development Order 
+
+### Sprint Zero 
+
+#### Implement: 
+
+- Repository setup. 
+
+- Architecture setup. 
+
+- Environment configurations. 
+
+- Database setup. 
+
+- Security foundations. 
+
+### Sprint One 
+
+#### Implement: 
+
+- Authentication. 
+
+- Organizations. 
+
+- Policies. 
+
+- Multi-tenancy. 
+
+- Dashboard foundations. 
+
+### Sprint Two 
+
+#### Implement: 
+
+- Chatbot management. 
+
+- Knowledge source management. 
+
+- Synchronization workflows. 
+
+### Sprint Three 
+
+#### Implement: 
+
+- Scout Widget. 
+
+- Session management. 
+
+- Deployment workflows. 
+
+### Sprint Four 
+
+#### Implement: 
+
+- Knowledge Layer. 
+
+- Retrieval mechanisms. 
+
+- Embedding workflows. 
+
+### Sprint Five 
+
+Implement: 
+
+- AI Layer. 
+
+- Multi-provider support. 
+
+- Fallback mechanisms. 
+
+### Sprint Six 
+
+Implement: 
+
+- Memory Framework. 
+
+- Optimization Layer. 
+
+- Token optimizations. 
+
+### Sprint Seven 
+
+Implement: 
+
+- Analytics. 
+
+- Monitoring. 
+
+- Performance optimizations. 
+
+### Sprint Eight 
+
+Implement: 
+
+- Production deployments. 
+
+- Security enhancements. 
+
+- Final testing. 
+
+## Development Philosophy 
+
+The implementation philosophy of Scout.io intentionally follows: 
+
+Foundation → Functionality → Intelligence → Production → Scalability 
+
+and not: 
+
+Frontend → Backend → AI → Deployment 
+
+Every phase should deliver meaningful capabilities rather than partially completed technological implementations. 
+
+## Project Constraints 
+
+The following constraints remain mandatory throughout development: 
+
+- Security takes precedence over feature additions. 
+
+- Organizations remain the owners of their knowledge. 
+
+- Multi-tenancy remains mandatory. 
+
+- Scout Core remains provider-independent. 
+
+- Optimization mechanisms remain privacy-preserving. 
+
+- Components remain independently replaceable. 
+
+- Graceful degradation mechanisms should always exist. 
+
+- Future architectural changes must preserve backward compatibility whenever feasible. 
+
+## Phase Philosophy 
+
+Scout.io intentionally evolves through capabilities rather than technologies. Each phase exists to progressively transform the platform from foundational infrastructure into an intelligent, production-ready AI Knowledge Infrastructure Platform. 
+
+The success of this roadmap will not be measured by implementation speed alone, but by its ability to preserve simplicity, extensibility, security, and reliability throughout every stage of development. 
+
+This document serves as the authoritative implementation roadmap for Scout.io and defines all development phases, deliverables, constraints, and milestones that future engineering efforts must inherit and preserve. 
+

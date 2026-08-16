@@ -98,7 +98,7 @@ The technology stack should remain approachable for:
 |Backend|FastAPI|
 |API Documentation|OpenAPI (Swagger)|
 |Widget SDK|React + TypeScript|
-|Authentication|OAuth + JWT|
+|Authentication|JWT (access + refresh) + TOTP MFA|
 |Session Management|Redis|
 |Background Jobs|Celery|
 |Message Broker|Redis|
@@ -115,7 +115,7 @@ The technology stack should remain approachable for:
 |Knowledge Processing|Unstructured.io|
 |Containerization|Docker|
 |Reverse Proxy|NGINX|
-|Monitoring|OpenTelemetry|
+|Monitoring|Prometheus + Grafana + Loki + Alertmanager|
 |Logging|Structured Logging|
 |Deployment|Docker Compose (MVP)|
 |Future Orchestration|Kubernetes|
@@ -242,9 +242,9 @@ FastAPI also aligns naturally with:
 
 ### MVP 
 
-- JWT Authentication 
+- JWT Authentication (access + refresh)
 
-- OAuth Support 
+- TOTP Multi-Factor Authentication
 
 - Role Based Access Control 
 
@@ -578,7 +578,9 @@ Future support includes:
 
 ### Technologies 
 
-- OpenTelemetry 
+- Prometheus Metrics + Grafana Dashboards
+
+- Loki Log Aggregation + Alertmanager
 
 - Structured Logging 
 
@@ -707,7 +709,7 @@ Examples include:
 |Redis|Sessions & Queues|
 |Celery|Background Jobs|
 |Unstructured.io|Knowledge Processing|
-|OpenTelemetry|Monitoring|
+|Prometheus + Grafana|Monitoring|
 |Docker|Containerization|
 
 

@@ -1,6 +1,12 @@
-# MEMORY 
+# Scout.io Data & Memory Model
 
-## Overview 
+> This document merges the previous Memory Framework doc into the data-model
+> reference. It covers the runtime memory/cache layer. For the relational schema
+> (Postgres tables, RLS), see the Data Model and RLS sections of
+> `docs/architecture/system-architecture.md`; for storage of vectors, see
+> `docs/integrations/vector-db-qdrant.md`.
+
+## Overview
 
 The Scout.io Memory Framework defines how contextual information is collected, processed, retained, optimized, synchronized, and forgotten throughout the platform. 
 
@@ -423,7 +429,7 @@ behaviours.
 
 ### Overview 
 
-Optimization Memory is one of the most important additions introduced by Architecture Revision v1.1. 
+Optimization Memory is one of the most important additions introduced by Architecture Revision v1.1 (see `docs/architecture/system-architecture.md`). 
 
 Optimization Memory is intentionally: 
 
