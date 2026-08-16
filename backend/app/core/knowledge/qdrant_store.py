@@ -207,3 +207,19 @@ class QdrantStore:
                 )
             ),
         )
+
+    def count_organization_chunks(self, organization_id: str) -> int:
+        if not self.client:
+            return 0
+        result = self.client.count(
+            collection_name=self.collection_name,
+            count_filter=qdrant_models.Filter(
+                must=[
+                    qdrant_models.FieldCondition(
+                        key="organization_id",
+                        match=qdrant_models.MatchValue(value=organization_id),
+                    )
+                ]
+            ),
+        )
+        return result.count

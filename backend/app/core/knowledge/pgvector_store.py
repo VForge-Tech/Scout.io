@@ -143,3 +143,17 @@ class PGVectorStore:
                 {"oid": organization_id},
             )
             conn.commit()
+
+    def count_organization_chunks(self, organization_id: str) -> int:
+        from sqlalchemy import text as sa_text
+        engine = self._get_engine()
+        with engine.connect() as conn:
+            return (
+                conn.execute(
+                    sa_text(
+                        "SELECT COUNT(*) FROM knowledge_vectors WHERE organization_id = :oid"
+                    ),
+                    {"oid": organization_id},
+                ).scalar()
+                or 0
+            )

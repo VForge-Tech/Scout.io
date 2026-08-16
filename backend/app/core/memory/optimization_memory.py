@@ -41,15 +41,22 @@ class OptimizationMemory:
         self.client.setex(key, self.ttl, response)
 
     def invalidate_org_cache(self, org_id: str):
+        """Drop optimization-response cache entries for an organization.
+
+        Keys are md5-hashed (`opt_cache:<md5(query:org)>`) so they cannot be
+        matched by prefix. Each cached value embeds no org marker either, so the
+        only correct purge is to scan and compare the key's md5 against the
+        org-scoped key derivation -- which requires re-deriving every key from
+        an unknown query. Instead we evict the whole `opt_cache:*` namespace:
+        it is a short-TTL, recomputable cache, so eviction is safe (only a
+        transient warm-up cost for the remaining orgs)."""
         if not self.client:
             return
         cursor = 0
-        pattern = f"opt_cache:*"
+        pattern = "opt_cache:*"
         while True:
             cursor, keys = self.client.scan(cursor, match=pattern, count=100)
             if keys:
-                org_keys = [k for k in keys if f":{org_id}" in k.decode() or True]
-                if org_keys:
-                    self.client.delete(*org_keys)
+                self.client.delete(*keys)
             if cursor == 0:
                 break

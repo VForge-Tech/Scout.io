@@ -337,6 +337,15 @@
 - **Validated end-to-end** against `docker/docker-compose.scratch.yml` (Postgres + Qdrant + MinIO + backup, project `scouttest`): seeded 3 orgs/3 messages + 3-point Qdrant collection, ran a real backup, tore everything down, restored from `--latest`, and verified — Postgres orgs=3/msgs=3, Qdrant points_count=3 with identical payloads, and a search smoke test returns the right doc at score 1.0. **Measured RTO ≈ 22 s** (download → wipe → pg_restore → qdrant recover → full stack up)
 - **Docs**: `docs/disaster-recovery.md` runbook (architecture, exact volume locations from compose files, incident procedure, verification steps, expected RTO/RPO, reproducible scratch-env DR test procedure)
 
+### Sprint 22: Org Offboarding (Permanent Data Deletion) [COMPLETED]
+- **Two-step confirmation flow** (platform-admin only): `POST /admin/organizations/{org_id}/offboard` returns a deletion **preview** (per-table Postgres counts, Qdrant/pgvector points, Redis cache counts, upload files/bytes) + a signed **confirmation token** (JWT `type=offboard_confirm`, bound to org+admin, 15 min TTL, deletes nothing); `POST /admin/organizations/{org_id}/offboard/confirm` with the token verifies it and executes the purge, returning a completion report
+- **Postgres purge** (`app/domain/offboarding/service.py`): deletes every org-scoped row in FK-safe child-before-parent order — `messages` (via session subquery), `analytics_events`, `daily_analytics`, `llm_usage`, `knowledge_sources`, `policies`, `sessions`, `chatbots`, `api_keys`, `audit_logs` (org-scoped), `webhooks`, `usage_billing_records`, `users`, then the `organizations` row; raw-SQL UUID params are dialect-aware (dashed on Postgres, hex on SQLite so tests pass)
+- **Vector purge**: `count_organization_chunks`/`delete_organization_chunks` on Qdrant collection (payload `organization_id` filter) and pgvector fallback rows when enabled
+- **Redis purge**: org memory (`org_config:*`/`org_policies:*`), session history keys collected from DB first, knowledge cache (`knowledge_cache:*` scanned + payload-matched on org id), and the `opt_cache:*` namespace evicted wholesale (md5-hashed keys, no org marker, short TTL — rationale in code)
+- **Uploads purge**: `shutil.rmtree(UPLOAD_DIR/<org_id>/)` with file/byte counts
+- **Audit-log retention decision (documented in `docs/offboarding.md`)**: org-scoped audit logs ARE purged (org data), but the offboarding op is written first as a platform-level proof (`organization_id`/`user_id` NULL, ids in `details`) that survives the purge as immutable proof; `usage_billing_records` are deleted too (NOT NULL FK to organizations blocks retaining), so financial settlement must precede offboarding
+- **Tests**: `backend/tests/test_offboarding.py` — 10 tests (service purge of every table, audit-proof survival, qdrant/redis/uploads mocks, preview-without-delete, token roundtrip/rejection, two-step endpoint flow, non-admin 403). Full suite: **195 passed, 8 skipped** (up from 185/8)
+
 ---
 
 ## Phase V: In Progress / Planned

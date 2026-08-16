@@ -16,6 +16,7 @@ from .knowledge_source import (
     KnowledgeSourceUpdate,
 )
 from .llm_usage import LLMUsageRead
+from .offboarding import OffboardConfirm, OffboardPreview, OffboardReport
 from .organization import OrganizationRead, OrganizationUpdate
 from .policy import PolicyCreate, PolicyRead, PolicyUpdate
 from .system_config import SystemConfigRead, SystemConfigUpdate
@@ -44,6 +45,9 @@ __all__ = [
     "KnowledgeSourceRead",
     "KnowledgeSourceUpdate",
     "LLMUsageRead",
+    "OffboardConfirm",
+    "OffboardPreview",
+    "OffboardReport",
     "OrganizationRead",
     "OrganizationUpdate",
     "PolicyCreate",

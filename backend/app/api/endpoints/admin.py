@@ -5,6 +5,7 @@ from sqlalchemy import func
 from sqlalchemy.orm import Session
 
 from app.api.deps import get_db_admin, get_db_with_org, require_admin, require_platform_admin
+from app.domain.offboarding import OffboardingService
 from app.models import (
     ApiKey,
     Chatbot,
@@ -18,6 +19,7 @@ from app.models import (
 )
 from app.schemas.audit_log import AuditLogRead
 from app.schemas.llm_usage import LLMUsageRead
+from app.schemas.offboarding import OffboardConfirm, OffboardPreview, OffboardReport
 from app.schemas.organization import OrganizationRead
 from app.utils.audit import create_audit_log
 
@@ -104,6 +106,77 @@ def delete_organization(
     db.delete(org)
     db.commit()
     return None
+
+
+@router.post("/organizations/{org_id}/offboard", response_model=OffboardPreview)
+def begin_org_offboard(
+    org_id: UUID,
+    request: Request,
+    db: Session = Depends(get_db_admin),
+    admin: User = Depends(require_platform_admin),
+):
+    """Step 1 of offboarding: return a signed confirmation token + deletion preview.
+
+    Nothing is deleted by this call. The token is short-lived (15 min) and bound
+    to this org and this admin; it must be echoed to the confirm endpoint.
+    """
+    org = db.query(Organization).filter(Organization.id == org_id).first()
+    if not org:
+        raise HTTPException(
+            status_code=status.HTTP_404_NOT_FOUND,
+            detail="Organization not found",
+        )
+
+    service = OffboardingService(db)
+    token = service.create_confirmation_token(org.id, admin.id)
+    preview = service.preview(org)
+    preview["confirmation_token"] = token
+
+    create_audit_log(
+        db,
+        action="org_offboard_requested",
+        user_id=admin.id,
+        organization_id=org_id,
+        details={"organization_name": org.name},
+        ip_address=request.client.host if request.client else None,
+    )
+
+    return preview
+
+
+@router.post("/organizations/{org_id}/offboard/confirm", response_model=OffboardReport)
+def confirm_org_offboard(
+    org_id: UUID,
+    payload: OffboardConfirm,
+    request: Request,
+    db: Session = Depends(get_db_admin),
+    admin: User = Depends(require_platform_admin),
+):
+    """Step 2 of offboarding: verify the signed token, then purge everything.
+
+    Permanently deletes all org-scoped Postgres rows, Qdrant/pgvector vectors,
+    org Redis caches and uploaded files. The purge itself is recorded in
+    audit_logs (platform-level proof of deletion, kept as an exception).
+    """
+    org = db.query(Organization).filter(Organization.id == org_id).first()
+    if not org:
+        raise HTTPException(
+            status_code=status.HTTP_404_NOT_FOUND,
+            detail="Organization not found",
+        )
+
+    service = OffboardingService(db)
+    if not service.verify_confirmation_token(payload.confirmation_token, org.id, admin.id):
+        raise HTTPException(
+            status_code=status.HTTP_400_BAD_REQUEST,
+            detail="Invalid or expired confirmation token",
+        )
+
+    return service.execute(
+        org,
+        admin_id=admin.id,
+        ip_address=request.client.host if request.client else None,
+    )
 
 
 @router.get("/stats")

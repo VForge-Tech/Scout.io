@@ -59,3 +59,10 @@ class OrganizationalMemory:
             except (json.JSONDecodeError, TypeError):
                 return None
         return None
+
+    def purge_org(self, org_id: str) -> int:
+        """Delete all org config/policies cache keys for an organization."""
+        if not self.client:
+            return 0
+        keys = [self._config_key(org_id), self._policies_key(org_id)]
+        return int(self.client.delete(*keys) or 0)

@@ -76,3 +76,10 @@ class SessionMemory:
             return
         key = f"session:{session_id}:history"
         self.client.delete(key)
+
+    def purge_org(self, session_ids: list[str]) -> int:
+        """Delete the session-history cache keys for a batch of session ids."""
+        if not self.client or not session_ids:
+            return 0
+        keys = [f"session:{sid}:history" for sid in session_ids]
+        return int(self.client.delete(*keys) or 0)
