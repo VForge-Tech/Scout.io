@@ -7,7 +7,9 @@ from unittest.mock import MagicMock, patch
 import pytest
 from fastapi.testclient import TestClient
 
-from app.core.security import hash_password
+import pyotp
+
+from app.core.security import encrypt_totp_secret, hash_password
 from app.domain.offboarding import OffboardingService
 from app.models import (
     AnalyticsEvent,
@@ -238,11 +240,17 @@ def _admin_headers(client, db):
     admin = User(
         id=uuid.uuid4(), email="platform@x.com",
         hashed_password=hash_password("pw"), organization_id=org.id,
-        role="platform_admin",
+        role="platform_admin", mfa_enabled=True,
+        totp_secret=encrypt_totp_secret("JBSWY3DPEHPK3PXP"),
     )
     db.add(admin)
     db.commit()
     resp = client.post("/api/v1/auth/login", json={"email": "platform@x.com", "password": "pw"})
+    mfa_token = resp.json()["mfa_token"]
+    resp = client.post(
+        "/api/v1/auth/mfa/verify-login",
+        json={"mfa_token": mfa_token, "code": pyotp.TOTP("JBSWY3DPEHPK3PXP").now()},
+    )
     token = resp.json()["access_token"]
     return {"Authorization": f"Bearer {token}"}
 

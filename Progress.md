@@ -346,10 +346,18 @@
 - **Audit-log retention decision (documented in `docs/offboarding.md`)**: org-scoped audit logs ARE purged (org data), but the offboarding op is written first as a platform-level proof (`organization_id`/`user_id` NULL, ids in `details`) that survives the purge as immutable proof; `usage_billing_records` are deleted too (NOT NULL FK to organizations blocks retaining), so financial settlement must precede offboarding
 - **Tests**: `backend/tests/test_offboarding.py` — 10 tests (service purge of every table, audit-proof survival, qdrant/redis/uploads mocks, preview-without-delete, token roundtrip/rejection, two-step endpoint flow, non-admin 403). Full suite: **195 passed, 8 skipped** (up from 185/8)
 
+### Sprint 23: TOTP Multi-Factor Authentication [COMPLETED]
+- **User model**: `totp_secret` (Fernet-encrypted at rest), `mfa_enabled`, `recovery_codes` (bcrypt-hashed JSON list) columns; alembic migration 0009. Encryption key is SHA-256-derived from `jwt_secret` (no new Vault secret to provision)
+- **`app/core/security/totp.py`**: pyotp secret generation, `otpauth://` provisioning URI, server-side QR as base64 PNG data URI (`qrcode` lib), Fernet encrypt/decrypt, one-time recovery-code generation/hashing/verification (format `XXXX-XXXX-XXXX-XXXX`, normalized on input)
+- **Endpoints** (`/auth/mfa/*`, new `app/api/endpoints/mfa.py`): `GET /status`; `POST /setup` (password-gated, returns secret + URI + QR); `POST /enable` (verifies a first TOTP code, persists encrypted secret + hashed recovery codes, returns plaintext codes once); `POST /disable` (password + TOTP/recovery code, clears MFA); `POST /recovery-codes/regenerate` (rotates codes); `POST /verify-login` (completes login for MFA users)
+- **Login flow**: for `mfa_enabled` users, `POST /auth/login` now returns `{mfa_required: true, mfa_token}` (short-lived JWT `type=mfa_verify`) instead of tokens; `/auth/mfa/verify-login` consumes the token plus a TOTP/recovery code and issues real access+refresh tokens. Recovery codes are single-use (consumed on use)
+- **Platform-admin enforcement**: `require_platform_admin` returns 403 ("MFA must be enabled...") for `platform_admin` accounts without MFA, making it mandatory for the `/admin` portal; regular org admins get a recommended-but-optional dashboard Settings UI. Widget session auth (`type=widget` JWT from `/widgets/sessions`) is untouched and never requires MFA
+- **Frontend**: `auth/login.tsx` adds a verification-code step after password when MFA is required; `dashboard/settings.tsx` adds a Two-Factor Authentication card (QR + manual key, enable with code, one-time recovery-code display, disable + regenerate with password/code confirmation)
+- **Tests**: `backend/tests/test_mfa.py` (15 tests: status, setup password gate, secret/QR shape, encrypted-at-rest persistence, enable wrong-code, login verify step, TOTP + recovery-code login, single-use recovery codes, disable, regenerate invalidation, platform-admin gating before/after enable). Existing platform-admin tests updated to seed MFA and complete the two-step login. Full backend suite: **210 passed, 8 skipped** (up from 195/8); frontend typecheck + 3 vitest tests pass
+
 ---
 
 ## Phase V: In Progress / Planned
-- Multi-factor authentication (TOTP-based)
 - Advanced cost tracking and budget alerts per organization/chatbot (plan tiers/billing + usage-based overage + subscription management done in Sprints 13–15; feature-flagged)
 - CI/CD: PR CI + GHCR image builds done in Sprint 16; staging compose/docs done in Sprint 17; deploy-staging.yml and approval-gated production deploy not yet wired
 - Performance optimization: incremental sync, intelligent caching improvements

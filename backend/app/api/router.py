@@ -9,6 +9,7 @@ from app.api.endpoints import (
     chatbots,
     developer,
     knowledge_sources,
+    mfa,
     organizations,
     policies,
     retrieval,
@@ -22,6 +23,7 @@ from app.api.endpoints import (
 api_router = APIRouter(prefix="/api/v1")
 
 api_router.include_router(auth.router)
+api_router.include_router(mfa.router)
 api_router.include_router(organizations.router)
 api_router.include_router(chatbots.router)
 api_router.include_router(policies.router)

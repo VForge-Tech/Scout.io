@@ -1,9 +1,12 @@
 import uuid
 
+import pyotp
 from fastapi.testclient import TestClient
 
-from app.core.security import hash_password
+from app.core.security import encrypt_totp_secret, hash_password
 from app.models import Organization, User
+
+TOTP_SECRET = "JBSWY3DPEHPK3PXP"
 
 
 def _seed(db, admin_role="platform_admin"):
@@ -16,19 +19,30 @@ def _seed(db, admin_role="platform_admin"):
         organization_id=org.id,
         role=admin_role,
         full_name="Admin",
+        mfa_enabled=True,
+        totp_secret=encrypt_totp_secret(TOTP_SECRET),
     )
     db.add(user)
     db.commit()
     return org, user
 
 
-def _admin_headers(client, db):
-    _seed(db, admin_role="platform_admin")
+def _login_mfa(client, email="admin@test.com", password="testpass123"):
     resp = client.post(
         "/api/v1/auth/login",
-        json={"email": "admin@test.com", "password": "testpass123"},
+        json={"email": email, "password": password},
     )
-    token = resp.json()["access_token"]
+    mfa_token = resp.json()["mfa_token"]
+    resp = client.post(
+        "/api/v1/auth/mfa/verify-login",
+        json={"mfa_token": mfa_token, "code": pyotp.TOTP(TOTP_SECRET).now()},
+    )
+    return resp.json()["access_token"]
+
+
+def _admin_headers(client, db):
+    _seed(db, admin_role="platform_admin")
+    token = _login_mfa(client)
     return {"Authorization": f"Bearer {token}"}
 
 
@@ -76,11 +90,7 @@ def test_platform_stats(client: TestClient, db):
 
 def test_non_admin_cannot_access_admin(client: TestClient, db):
     _seed(db, admin_role="member")
-    resp = client.post(
-        "/api/v1/auth/login",
-        json={"email": "admin@test.com", "password": "testpass123"},
-    )
-    token = resp.json()["access_token"]
+    token = _login_mfa(client)
     headers = {"Authorization": f"Bearer {token}"}
 
     response = client.get("/api/v1/admin/organizations", headers=headers)

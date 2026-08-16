@@ -1,6 +1,6 @@
 import uuid
 
-from sqlalchemy import Boolean, Column, DateTime, ForeignKey, String, func
+from sqlalchemy import JSON, Boolean, Column, DateTime, ForeignKey, String, Text, func
 from sqlalchemy.dialects.postgresql import UUID
 from sqlalchemy.orm import relationship
 
@@ -19,6 +19,9 @@ class User(Base):
     )
     role = Column(String(50), nullable=False, default="member")
     is_active = Column(Boolean, default=True)
+    totp_secret = Column(Text, nullable=True)
+    mfa_enabled = Column(Boolean, nullable=False, default=False)
+    recovery_codes = Column(JSON, nullable=True)
     created_at = Column(DateTime(timezone=True), server_default=func.now(), nullable=False)
 
     organization = relationship("Organization", back_populates="users")

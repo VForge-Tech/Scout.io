@@ -139,6 +139,7 @@ def platform_admin_client(two_orgs, db: Session, client: TestClient):
         organization_id=admin_org.id,
         role="platform_admin",
         full_name="Platform Admin",
+        mfa_enabled=True,
     )
     db.add(admin_user)
     db.commit()

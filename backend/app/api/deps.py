@@ -77,11 +77,19 @@ def require_admin(current_user: User = Depends(get_current_user)) -> User:
 
 
 def require_platform_admin(current_user: User = Depends(get_current_user)) -> User:
-    """Require platform admin role for cross-organization operations."""
+    """Require platform admin role for cross-organization operations.
+
+    MFA is mandatory for platform admin accounts; refuse access until enabled.
+    """
     if current_user.role != "platform_admin":
         raise HTTPException(
             status_code=status.HTTP_403_FORBIDDEN,
             detail="Platform admin privileges required",
+        )
+    if not current_user.mfa_enabled:
+        raise HTTPException(
+            status_code=status.HTTP_403_FORBIDDEN,
+            detail="MFA must be enabled before using platform admin features",
         )
     return current_user
 

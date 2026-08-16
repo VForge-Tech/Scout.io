@@ -12,7 +12,12 @@ from app.core.security import (
     verify_password,
 )
 from app.models import User
-from app.schemas.auth import LoginRequest, RefreshRequest, TokenResponse
+from app.schemas.auth import (
+    LoginRequest,
+    MfaRequiredResponse,
+    RefreshRequest,
+    TokenResponse,
+)
 from app.utils.audit import create_audit_log
 
 router = APIRouter(prefix="/auth", tags=["auth"])
@@ -30,7 +35,7 @@ def get_me(user: User = Depends(get_current_user)):
     }
 
 
-@router.post("/login", response_model=TokenResponse)
+@router.post("/login")
 def login(payload: LoginRequest, request: Request, db: Session = Depends(get_db)):
     user = db.query(User).filter(User.email == payload.email).first()
     if not user or not verify_password(payload.password, user.hashed_password):
@@ -43,6 +48,13 @@ def login(payload: LoginRequest, request: Request, db: Session = Depends(get_db)
             status_code=status.HTTP_403_FORBIDDEN,
             detail="Account is disabled",
         )
+
+    if user.mfa_enabled:
+        mfa_token = create_access_token(
+            subject=str(user.id),
+            extra_claims={"type": "mfa_verify"},
+        )
+        return MfaRequiredResponse(mfa_required=True, mfa_token=mfa_token)
 
     access_token = create_access_token(
         subject=str(user.id),
