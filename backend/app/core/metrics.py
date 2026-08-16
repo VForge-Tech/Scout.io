@@ -71,6 +71,12 @@ LLM_FALLBACK_TRIGGERS = Counter(
     ["primary_model", "fallback_model"],
 )
 
+RERANKER_FALLBACKS = Counter(
+    "scout_reranker_fallback_triggers_total",
+    "Number of times the cross-encoder reranker was unavailable and retrieval "
+    "fell back to Qdrant's original similarity ranking",
+)
+
 # ---------------------------------------------------------------------------
 # Celery signals (task success / failure)
 # ---------------------------------------------------------------------------

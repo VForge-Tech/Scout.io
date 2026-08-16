@@ -473,6 +473,9 @@ async def test_chatbot_endpoint(
         behaviour=chatbot.behaviour,
         db=db,
         policies=policies,
+        reranker_enabled=(
+            chatbot.config.get("reranker_enabled") if chatbot.config else None
+        ),
     )
     response_time = round((time.time() - start) * 1000, 2)
     

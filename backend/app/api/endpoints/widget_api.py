@@ -144,6 +144,9 @@ def send_widget_message(
         behaviour=chatbot.behaviour if chatbot else "balanced",
         db=db,
         policies=policies,
+        reranker_enabled=(
+            chatbot.config.get("reranker_enabled") if chatbot and chatbot.config else None
+        ),
     )
 
     # Expose per-stage pipeline timing (ms) to load-test clients via a header.

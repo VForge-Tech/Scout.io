@@ -136,6 +136,7 @@ class ResponsePipeline:
         behaviour: str = "balanced",
         db: Session | None = None,
         policies: list[Policy] | None = None,
+        reranker_enabled: bool | None = None,
     ) -> dict:
         org_id_str = str(organization_id)
         chatbot_id_str = str(chatbot_id) if chatbot_id else None
@@ -161,6 +162,7 @@ class ResponsePipeline:
                 organization_id=org_id_str,
                 chatbot_id=chatbot_id_str,
                 policies=policies,
+                reranker_enabled=reranker_enabled,
             )
             timings["retrieval"] = (time.perf_counter() - _t0) * 1000
             _t0 = time.perf_counter()

@@ -43,18 +43,23 @@ def debug_retrieve(
     )
 
     engine = KnowledgeEngine()
+    reranker_enabled = (
+        chatbot.config.get("reranker_enabled") if chatbot and chatbot.config else None
+    )
     results = engine.retrieve(
         query=query,
         organization_id=str(user.organization_id),
         chatbot_id=str(chatbot.id) if chatbot else None,
         policies=policies,
         top_k=top_k,
+        reranker_enabled=reranker_enabled,
     )
 
     return {
         "query": query,
         "organization_id": str(user.organization_id),
         "chatbot_id": str(chatbot.id) if chatbot else None,
+        "reranker_enabled": reranker_enabled,
         "results_count": len(results),
         "results": results,
     }

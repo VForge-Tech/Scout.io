@@ -84,6 +84,16 @@ class Settings(BaseSettings):
     ollama_embedding_model: str = "nomic-embed-text"
     ollama_chat_model: str = "llama3.2"
 
+    # Cross-encoder reranker (services/reranker). When enabled, the knowledge
+    # retrieval step re-ranks Qdrant's top-K candidates with the reranker before
+    # they feed the context builder. Disable globally here or per-chatbot via the
+    # chatbot's config JSON (`{"reranker_enabled": false}`).
+    reranker_enabled: bool = False
+    reranker_url: str = "http://reranker:8082"
+    reranker_timeout_ms: int = 2000
+    reranker_retries: int = 1
+    reranker_max_candidates: int = 10
+
     # Docker compose profile selection
     deployment_profile: str = "full"  # "full" or "minimal"
 
