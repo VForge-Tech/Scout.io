@@ -1,5 +1,6 @@
-import { useEffect, useState } from 'react';
+import { useCallback, useEffect, useState } from 'react';
 import { fetchArray, api } from '../../lib/api';
+import { usePolling } from '../../lib/usePolling';
 import AdminLayout from '../../components/AdminLayout';
 
 export default function AdminOrganizations() {
@@ -12,21 +13,32 @@ export default function AdminOrganizations() {
     setMounted(true);
   }, []);
 
-  const fetchOrgs = async () => {
+  const fetchOrgs = useCallback(async () => {
     if (!mounted) return;
     try {
-      setLoading(true);
       setError(null);
       const data = await fetchArray<any>('/admin/organizations');
       setOrgs(data);
     } catch (e: any) {
       setError(e.message);
-    } finally {
-      setLoading(false);
     }
-  };
+  }, [mounted]);
 
-  useEffect(() => { if (mounted) fetchOrgs(); }, [mounted]);
+  useEffect(() => {
+    if (!mounted) return;
+    let cancelled = false;
+    (async () => {
+      try {
+        setLoading(true);
+        await fetchOrgs();
+      } finally {
+        if (!cancelled) setLoading(false);
+      }
+    })();
+    return () => { cancelled = true; };
+  }, [mounted, fetchOrgs]);
+
+  usePolling(fetchOrgs);
 
   const suspendOrg = async (id: string) => {
     await api.patch(`/admin/organizations/${id}`, { suspended: true });

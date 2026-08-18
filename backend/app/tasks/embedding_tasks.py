@@ -27,7 +27,6 @@ def process_knowledge_source(self, source_id: str):
     from app.db.session import SessionLocal
     from app.models import KnowledgeSource
     from app.core.knowledge.embeddings import EmbeddingService
-    from app.core.knowledge.qdrant_store import QdrantStore
     from app.core.knowledge.engine import KnowledgeEngine
     from app.core.knowledge.connectors import ConnectorRegistry, ConnectorConfig
 
@@ -51,7 +50,6 @@ def process_knowledge_source(self, source_id: str):
             return {"status": "completed", "chunks": 0}
 
         engine = KnowledgeEngine(
-            qdrant_store=QdrantStore(),
             embedding_service=EmbeddingService(),
         )
 

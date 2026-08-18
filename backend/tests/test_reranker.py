@@ -114,8 +114,8 @@ class TestKnowledgeEngineRerank:
     def test_retrieve_reranks_after_search(self, monkeypatch):
         monkeypatch.setattr(get_settings(), "reranker_enabled", True)
         engine = KnowledgeEngine()
-        engine.qdrant = MagicMock()
-        engine.qdrant.search.return_value = self._results()
+        engine.store = MagicMock()
+        engine.store.search.return_value = self._results()
         with patch.object(
             engine.reranker,
             "rerank",
@@ -134,8 +134,8 @@ class TestKnowledgeEngineRerank:
     def test_retrieve_fallback_keeps_qdrant_order(self, monkeypatch):
         monkeypatch.setattr(get_settings(), "reranker_enabled", True)
         engine = KnowledgeEngine()
-        engine.qdrant = MagicMock()
-        engine.qdrant.search.return_value = self._results()
+        engine.store = MagicMock()
+        engine.store.search.return_value = self._results()
         with patch.object(engine.reranker, "rerank", side_effect=RerankerUnavailable("down")):
             out = engine.retrieve(query="q", organization_id="org1")
             assert [r["id"] for r in out] == ["c1", "c2", "c3"]

@@ -1,4 +1,5 @@
 import DeveloperLayout from '../../components/DeveloperLayout';
+import { resolveApiBase } from '../../lib/api';
 
 export default function ApiDocs() {
   return (
@@ -11,7 +12,7 @@ export default function ApiDocs() {
 
         <h3 className="text-lg font-medium text-gray-900 mt-6 mb-2">Base URL</h3>
         <code className="block bg-gray-50 p-3 rounded text-sm font-mono">
-          {process.env.NEXT_PUBLIC_API_URL || 'http://localhost:8000/api/v1'}
+          {resolveApiBase(process.env.NEXT_PUBLIC_API_URL)}
         </code>
 
         <h3 className="text-lg font-medium text-gray-900 mt-6 mb-2">Authentication</h3>

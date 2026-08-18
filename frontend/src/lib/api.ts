@@ -1,4 +1,24 @@
-const API_BASE = process.env.NEXT_PUBLIC_API_URL || 'http://localhost:8000/api/v1';
+export function resolveApiBase(raw?: string): string {
+  const trimmed = (raw || 'http://localhost:8000').replace(/\/+$/, '');
+  return trimmed.endsWith('/api/v1') ? trimmed : `${trimmed}/api/v1`;
+}
+
+export async function extractApiError(res: Response): Promise<string> {
+  const text = await res.text().catch(() => '');
+  if (!text) return `Request failed (${res.status} ${res.statusText})`;
+  try {
+    const data = JSON.parse(text);
+    if (data && typeof data.detail === 'string') return data.detail;
+    if (data && typeof data.detail === 'object' && Array.isArray(data.detail)) {
+      return data.detail.map((d: any) => d.msg || JSON.stringify(d)).join('; ');
+    }
+    return text;
+  } catch {
+    return text || `Request failed (${res.status} ${res.statusText})`;
+  }
+}
+
+const API_BASE = resolveApiBase(process.env.NEXT_PUBLIC_API_URL);
 
 interface RequestOptions {
   method?: string;

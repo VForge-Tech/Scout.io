@@ -1,4 +1,5 @@
 import { useCallback, useEffect, useMemo, useState } from 'react';
+import { usePolling } from '../../lib/usePolling';
 import {
   Bar,
   CartesianGrid,
@@ -174,6 +175,8 @@ export default function DashboardAnalytics() {
     setLoading(true);
     fetchData();
   }, [mounted, range, fetchData]);
+
+  usePolling(fetchData, 30000);
 
   const byDate = useMemo(() => {
     const map: Record<string, DailyAnalyticsRow> = {};

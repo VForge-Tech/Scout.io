@@ -2,6 +2,7 @@ from uuid import UUID
 
 from app.core.config import get_settings
 from app.core.knowledge.embeddings import EmbeddingService
+from app.core.knowledge.pgvector_store import PGVectorStore
 from app.core.knowledge.qdrant_store import QdrantStore
 from app.core.knowledge.reranker import RerankerClient
 from app.core.metrics import RERANKER_FALLBACKS
@@ -11,23 +12,39 @@ settings = get_settings()
 
 
 class KnowledgeEngine:
+    """Retrieval engine that routes to the active vector store.
+
+    Store selection (highest priority first):
+      1. Qdrant when ``settings.qdrant_enabled`` is true (default).
+      2. pgvector when ``settings.qdrant_enabled`` is false and
+         ``settings.pgvector_enabled`` is true (quick-start / Qdrant-less runs).
+      3. Otherwise a no-op QdrantStore so retrieval degrades to empty results
+         instead of raising.
+    """
+
     def __init__(
         self,
         qdrant_store: QdrantStore | None = None,
         embedding_service: EmbeddingService | None = None,
         reranker_client: RerankerClient | None = None,
     ):
-        self.qdrant = qdrant_store or QdrantStore(
-            embedding_service=embedding_service or EmbeddingService()
-        )
-        self.embedding_service = embedding_service or EmbeddingService()
+        embedding_service = embedding_service or EmbeddingService()
+        self.embedding_service = embedding_service
+        if qdrant_store is not None:
+            self.store = qdrant_store
+        elif settings.qdrant_enabled:
+            self.store = QdrantStore(embedding_service=embedding_service)
+        elif settings.pgvector_enabled:
+            self.store = PGVectorStore(embedding_service=embedding_service)
+        else:
+            self.store = QdrantStore(embedding_service=embedding_service)
         self.reranker = reranker_client or RerankerClient()
 
     def index_chunks(
         self,
         chunks: list[tuple[str, dict]],
     ):
-        self.qdrant.index_chunks(chunks)
+        self.store.index_chunks(chunks)
 
     def retrieve(
         self,
@@ -41,7 +58,7 @@ class KnowledgeEngine:
         org_id_str = str(organization_id)
         chatbot_id_str = str(chatbot_id) if chatbot_id else None
 
-        results = self.qdrant.search(
+        results = self.store.search(
             query=query,
             top_k=top_k or settings.top_k_retrieval,
             organization_id=org_id_str,
@@ -159,7 +176,7 @@ class KnowledgeEngine:
         return "\n\n".join(formatted)
 
     def delete_source_data(self, source_id: str):
-        self.qdrant.delete_source_chunks(source_id)
+        self.store.delete_source_chunks(source_id)
 
     def delete_organization_data(self, organization_id: str):
-        self.qdrant.delete_organization_chunks(organization_id)
+        self.store.delete_organization_chunks(organization_id)

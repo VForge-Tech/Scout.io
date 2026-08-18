@@ -22,6 +22,23 @@ os.environ.setdefault("RAZORPAY_KEY_SECRET", "test-secret-placeholder")
 os.environ.setdefault("RAZORPAY_WEBHOOK_SECRET", "test-webhook-secret")
 os.environ.setdefault("BILLING_ENABLED", "true")
 
+# secrets.py runs load_dotenv(override=True) at import, which would overwrite the
+# test env vars above with the real backend/.env values (e.g. the Postgres
+# DATABASE_URL). Import it now, then re-assert the test values so the app
+# resolves settings against the SQLite test DB, not a live Postgres.
+from app.core import secrets  # noqa: F401  (triggers load_dotenv)
+
+os.environ["DATABASE_URL"] = "sqlite:///./test_scout.db"
+os.environ["REDIS_URL"] = "redis://localhost:6379/0"
+os.environ["QDRANT_URL"] = "http://localhost:6333"
+os.environ["JWT_SECRET"] = "test-jwt-secret-min-32-chars-long"
+os.environ["CELERY_BROKER_URL"] = "redis://localhost:6379/1"
+os.environ["CELERY_RESULT_BACKEND"] = "redis://localhost:6379/1"
+os.environ["RAZORPAY_KEY_ID"] = "rzp_test_placeholder"
+os.environ["RAZORPAY_KEY_SECRET"] = "test-secret-placeholder"
+os.environ["RAZORPAY_WEBHOOK_SECRET"] = "test-webhook-secret"
+os.environ["BILLING_ENABLED"] = "true"
+
 from app.api.deps import get_db, get_db_admin, get_db_with_org, get_db_for_admin, get_current_user
 from app.core.config import get_settings
 from app.db.base import Base

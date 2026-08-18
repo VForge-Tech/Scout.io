@@ -1,5 +1,6 @@
-import { useEffect, useState } from 'react';
-import { fetchArray, api } from '../../lib/api';
+import { useCallback, useEffect, useState } from 'react';
+import { fetchArray } from '../../lib/api';
+import { usePolling } from '../../lib/usePolling';
 import AdminLayout from '../../components/AdminLayout';
 
 export default function AuditLogs() {
@@ -13,12 +14,32 @@ export default function AuditLogs() {
     setMounted(true);
   }, []);
 
+  const fetchLogs = useCallback(async () => {
+    if (!mounted) return;
+    try {
+      setError(null);
+      const d = await fetchArray<any>(`/admin/audit-logs?limit=50&offset=${page * 50}`);
+      setLogs(d);
+    } catch (e: any) {
+      setError(e.message);
+    }
+  }, [page, mounted]);
+
   useEffect(() => {
     if (!mounted) return;
-    fetchArray<any>(`/admin/audit-logs?limit=50&offset=${page * 50}`)
-      .then((d) => { setLogs(d); setLoading(false); })
-      .catch((e: any) => { setError(e.message); setLoading(false); });
-  }, [page, mounted]);
+    let cancelled = false;
+    (async () => {
+      try {
+        setLoading(true);
+        await fetchLogs();
+      } finally {
+        if (!cancelled) setLoading(false);
+      }
+    })();
+    return () => { cancelled = true; };
+  }, [mounted, fetchLogs]);
+
+  usePolling(fetchLogs);
 
   return (
     <AdminLayout>

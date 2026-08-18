@@ -1,5 +1,7 @@
 import { useState } from 'react';
 import { useRouter } from 'next/router';
+import Link from 'next/link';
+import { extractApiError } from '../../lib/api';
 
 export default function LoginPage() {
   const [email, setEmail] = useState('');
@@ -19,8 +21,7 @@ export default function LoginPage() {
         body: JSON.stringify({ email, password }),
       });
       if (!res.ok) {
-        const err = await res.json();
-        throw new Error(err.detail || 'Login failed');
+        throw new Error(await extractApiError(res));
       }
       const data = await res.json();
       if (data.mfa_required) {
@@ -46,8 +47,7 @@ export default function LoginPage() {
         body: JSON.stringify({ mfa_token: mfaToken, code: mfaCode }),
       });
       if (!res.ok) {
-        const err = await res.json();
-        throw new Error(err.detail || 'Verification failed');
+        throw new Error(await extractApiError(res));
       }
       const data = await res.json();
       localStorage.setItem('access_token', data.access_token);
@@ -119,6 +119,12 @@ export default function LoginPage() {
             </button>
           </form>
         )}
+        <p className="text-sm text-gray-600 text-center mt-6">
+          Don&apos;t have an account?{' '}
+          <Link href="/auth/signup" className="text-blue-600 hover:underline">
+            Sign up
+          </Link>
+        </p>
       </div>
     </div>
   );

@@ -1,5 +1,6 @@
-import { useEffect, useState } from 'react';
+import { useCallback, useEffect, useState } from 'react';
 import { fetchArray, api } from '../../lib/api';
+import { usePolling } from '../../lib/usePolling';
 import DashboardLayout from '../../components/DashboardLayout';
 
 interface Chatbot {
@@ -24,23 +25,32 @@ export default function ChatbotsList() {
     setMounted(true);
   }, []);
 
-  const fetchChatbots = async () => {
+  const fetchChatbots = useCallback(async () => {
     if (!mounted) return;
     try {
-      setLoading(true);
       setError(null);
       const data = await fetchArray<Chatbot>('/chatbots');
       setChatbots(data);
     } catch (e: any) {
       setError(e.message);
-    } finally {
-      setLoading(false);
     }
-  };
+  }, [mounted]);
 
   useEffect(() => {
-    if (mounted) fetchChatbots();
-  }, [mounted]);
+    if (!mounted) return;
+    let cancelled = false;
+    (async () => {
+      try {
+        setLoading(true);
+        await fetchChatbots();
+      } finally {
+        if (!cancelled) setLoading(false);
+      }
+    })();
+    return () => { cancelled = true; };
+  }, [mounted, fetchChatbots]);
+
+  usePolling(fetchChatbots);
 
   const deleteChatbot = async () => {
     if (!pendingDelete) return;

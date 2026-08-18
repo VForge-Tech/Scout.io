@@ -1,19 +1,28 @@
-import { useEffect, useState } from 'react';
+import { useCallback, useEffect, useState } from 'react';
 import AdminLayout from '../../components/AdminLayout';
+import { usePolling } from '../../lib/usePolling';
 
 export default function AdminDashboard() {
   const [stats, setStats] = useState<any>(null);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState('');
 
-  useEffect(() => {
-    fetch('/api/v1/admin/stats', {
+  const fetchStats = useCallback(async () => {
+    const res = await fetch('/api/v1/admin/stats', {
       headers: { Authorization: `Bearer ${localStorage.getItem('access_token')}` },
-    })
-      .then((r) => { if (!r.ok) throw new Error('Failed'); return r.json(); })
-      .then((d) => { setStats(d); setLoading(false); })
-      .catch(() => { setError('Failed to load stats'); setLoading(false); });
+    });
+    if (!res.ok) throw new Error('Failed');
+    const d = await res.json();
+    setStats(d);
+    setError('');
+    return d;
   }, []);
+
+  useEffect(() => {
+    fetchStats().catch(() => setError('Failed to load stats')).finally(() => setLoading(false));
+  }, [fetchStats]);
+
+  usePolling(fetchStats);
 
   return (
     <AdminLayout>

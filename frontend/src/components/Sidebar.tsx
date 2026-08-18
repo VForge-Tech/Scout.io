@@ -1,4 +1,5 @@
 import React from 'react';
+import { useRouter } from 'next/router';
 
 interface SidebarItem {
   label: string;
@@ -12,6 +13,7 @@ interface SidebarProps {
 }
 
 export default function Sidebar({ items, title }: SidebarProps) {
+  const router = useRouter();
   return (
     <aside className="w-64 bg-white shadow-sm border-r min-h-screen">
       <div className="p-4">
@@ -19,7 +21,9 @@ export default function Sidebar({ items, title }: SidebarProps) {
       </div>
       <nav className="space-y-1 px-2">
         {items.map((item) => {
-          const isActive = typeof window !== 'undefined' && window.location.pathname.startsWith(item.href);
+          const isActive =
+            router.pathname === item.href ||
+            router.pathname.startsWith(`${item.href}/`);
           return (
             <a
               key={item.href}

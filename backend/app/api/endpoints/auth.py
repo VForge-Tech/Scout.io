@@ -3,7 +3,8 @@ from uuid import UUID
 from fastapi import APIRouter, Depends, HTTPException, Request, status
 from sqlalchemy.orm import Session
 
-from app.api.deps import get_current_user, get_db
+from app.api.deps import get_current_user, get_db, get_db_admin
+from app.core.rate_limit import limiter
 from app.core.security import (
     create_access_token,
     create_refresh_token,
@@ -11,16 +12,75 @@ from app.core.security import (
     hash_password,
     verify_password,
 )
-from app.models import User
+from app.models import Organization, User
 from app.schemas.auth import (
     LoginRequest,
     MfaRequiredResponse,
     RefreshRequest,
+    RegisterRequest,
     TokenResponse,
 )
 from app.utils.audit import create_audit_log
 
 router = APIRouter(prefix="/auth", tags=["auth"])
+
+
+@router.post("/register", response_model=TokenResponse)
+@limiter.limit("10/minute")
+def register(
+    payload: RegisterRequest,
+    request: Request,
+    db: Session = Depends(get_db_admin),
+):
+    """Create a new organization and its first (admin) user, then auto-login.
+
+    Uses the platform-admin bypass session so the bootstrap rows can be
+    inserted under RLS before any org-scoped context exists.
+    """
+    existing = db.query(User).filter(User.email == payload.email).first()
+    if existing:
+        raise HTTPException(
+            status_code=status.HTTP_409_CONFLICT,
+            detail="Email already registered",
+        )
+
+    org = Organization(
+        name=payload.organization_name or f"{payload.full_name or payload.email} Org"
+    )
+    db.add(org)
+    db.flush()
+
+    user = User(
+        email=payload.email,
+        hashed_password=hash_password(payload.password),
+        full_name=payload.full_name,
+        organization_id=org.id,
+        role="admin",
+    )
+    db.add(user)
+    db.flush()
+
+    org_id = org.id
+    user_id = user.id
+    user_role = user.role
+
+    create_audit_log(
+        db, action="user.register", user_id=user_id,
+        organization_id=org_id,
+        ip_address=request.client.host if request.client else None,
+    )
+
+    access_token = create_access_token(
+        subject=str(user_id),
+        organization_id=org_id,
+        extra_claims={"role": user_role},
+    )
+    refresh_token = create_refresh_token(
+        subject=str(user_id),
+        organization_id=org_id,
+    )
+
+    return TokenResponse(access_token=access_token, refresh_token=refresh_token)
 
 
 @router.get("/me")

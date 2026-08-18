@@ -1,5 +1,6 @@
-import { useEffect, useState } from 'react';
+import { useCallback, useEffect, useState } from 'react';
 import { api } from '../../lib/api';
+import { usePolling } from '../../lib/usePolling';
 import DashboardLayout from '../../components/DashboardLayout';
 
 interface OrgInfo {
@@ -38,11 +39,17 @@ const STEP_LINKS: Record<string, string> = {
 function OnboardingChecklist() {
   const [checklist, setChecklist] = useState<Checklist | null>(null);
 
-  useEffect(() => {
+  const fetchChecklist = useCallback(() => {
     api.get<Checklist>('/analytics/onboarding')
       .then(setChecklist)
       .catch(() => {});
   }, []);
+
+  useEffect(() => {
+    fetchChecklist();
+  }, [fetchChecklist]);
+
+  usePolling(fetchChecklist);
 
   if (!checklist || checklist.completed_count >= checklist.steps.length) return null;
 
@@ -89,24 +96,33 @@ export default function DashboardOverview() {
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState('');
 
+  const fetchData = useCallback(async () => {
+    try {
+      const [orgData, analyticsData] = await Promise.all([
+        api.get<OrgInfo>('/organizations/me'),
+        api.get<Analytics>('/analytics/organization'),
+      ]);
+      setOrg(orgData);
+      setAnalytics(analyticsData);
+      setError('');
+    } catch (e: any) {
+      setError(e.message || 'Failed to load dashboard data');
+    }
+  }, []);
+
   useEffect(() => {
-    const fetchData = async () => {
+    const initial = async () => {
       try {
         setLoading(true);
-        const [orgData, analyticsData] = await Promise.all([
-          api.get<OrgInfo>('/organizations/me'),
-          api.get<Analytics>('/analytics/organization'),
-        ]);
-        setOrg(orgData);
-        setAnalytics(analyticsData);
-      } catch (e: any) {
-        setError(e.message || 'Failed to load dashboard data');
+        await fetchData();
       } finally {
         setLoading(false);
       }
     };
-    fetchData();
-  }, []);
+    initial();
+  }, [fetchData]);
+
+  usePolling(fetchData);
 
   const plan = (org?.configuration as Record<string, unknown> | undefined)?.plan as string ?? 'free';
   const planLabel = plan.charAt(0).toUpperCase() + plan.slice(1);

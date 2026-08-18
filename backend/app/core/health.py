@@ -14,35 +14,47 @@ def check_dependencies() -> dict[str, str]:
     services: dict[str, str] = {"self": "ok"}
 
     try:
+        from sqlalchemy import text
+
         db = SessionLocal()
-        db.execute(db.bind.text("SELECT 1"))
+        db.execute(text("SELECT 1"))
         db.close()
         services["database"] = "ok"
     except Exception as e:  # noqa: BLE001
         services["database"] = f"error: {e}"
 
-    try:
-        import redis
+    if not settings.redis_url:
+        services["redis"] = "skipped"
+    else:
+        try:
+            import redis
 
-        r = redis.from_url(settings.redis_url, socket_connect_timeout=2)
-        r.ping()
-        r.close()
-        services["redis"] = "ok"
-    except Exception as e:  # noqa: BLE001
-        services["redis"] = f"error: {e}"
+            r = redis.from_url(settings.redis_url, socket_connect_timeout=2)
+            r.ping()
+            r.close()
+            services["redis"] = "ok"
+        except Exception as e:  # noqa: BLE001
+            services["redis"] = f"error: {e}"
 
-    try:
-        from qdrant_client import QdrantClient
+    if not settings.qdrant_enabled or not settings.qdrant_url:
+        services["qdrant"] = "skipped"
+    else:
+        try:
+            from qdrant_client import QdrantClient
 
-        qdrant = QdrantClient(url=settings.qdrant_url)
-        qdrant.get_collections()
-        services["qdrant"] = "ok"
-    except Exception as e:  # noqa: BLE001
-        services["qdrant"] = f"error: {e}"
+            qdrant = QdrantClient(url=settings.qdrant_url)
+            qdrant.get_collections()
+            services["qdrant"] = "ok"
+        except Exception as e:  # noqa: BLE001
+            services["qdrant"] = f"error: {e}"
 
     return services
 
 
 def dependencies_healthy() -> bool:
-    """True when every dependency reports ok."""
-    return all(v == "ok" for v in check_dependencies().values())
+    """True when every required dependency reports ok.
+
+    Services skipped because their feature is disabled (e.g. Qdrant when
+    ``qdrant_enabled=false``) are not considered failures.
+    """
+    return all(v in ("ok", "skipped") for v in check_dependencies().values())

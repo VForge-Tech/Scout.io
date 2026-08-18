@@ -6,6 +6,17 @@ from functools import lru_cache
 from typing import Any, Optional
 
 import hvac
+from dotenv import load_dotenv
+
+# Load .env into the process environment BEFORE any os.getenv() fallback reads
+# run. The secret manager and Settings.__init__ run before pydantic-settings'
+# own env_file handling, so without this the .env values are invisible.
+#
+# override=True: the .env file is the source of truth for local dev. Without
+# this, a stale DATABASE_URL left in a shell session (e.g. sqlite:///...) would
+# silently shadow the Postgres URL in .env, because python-dotenv does not
+# overwrite already-set environment variables by default.
+load_dotenv(override=True)
 
 logger = logging.getLogger(__name__)
 
