@@ -85,6 +85,65 @@ export const api = {
   },
 };
 
+export interface SSEEvent {
+  type: string;
+  [key: string]: unknown;
+}
+
+/**
+ * POST to a Server-Sent-Events endpoint and invoke `onEvent` for each JSON
+ * `data:` frame as it arrives. Used by the Streaming Playground to render
+ * tokens as they stream in. Throws on non-2xx responses / network failures.
+ */
+export async function streamRequest(
+  path: string,
+  body: unknown,
+  onEvent: (event: SSEEvent) => void,
+): Promise<void> {
+  const headers: Record<string, string> = { 'Content-Type': 'application/json' };
+  if (typeof window !== 'undefined') {
+    const token = localStorage.getItem('access_token');
+    if (token) headers['Authorization'] = `Bearer ${token}`;
+  }
+
+  const res = await fetch(`${API_BASE}${path}`, {
+    method: 'POST',
+    headers,
+    body: JSON.stringify(body),
+  });
+
+  if (!res.ok || !res.body) {
+    throw new Error(await extractApiError(res));
+  }
+
+  const reader = res.body.getReader();
+  const decoder = new TextDecoder();
+  let buffer = '';
+
+  for (;;) {
+    const { done, value } = await reader.read();
+    if (done) break;
+    buffer += decoder.decode(value, { stream: true });
+
+    const frames = buffer.split('\n\n');
+    buffer = frames.pop() ?? '';
+    for (const frame of frames) {
+      const dataLines = frame
+        .split('\n')
+        .filter((line) => line.startsWith('data:'))
+        .map((line) => line.slice(5).trim());
+      for (const data of dataLines) {
+        if (!data) continue;
+        try {
+          onEvent(JSON.parse(data) as SSEEvent);
+        } catch {
+          // skip malformed events
+        }
+      }
+    }
+  }
+}
+
 // Helper for pages that need to fetch arrays with proper error handling
 export async function fetchArray<T>(path: string): Promise<T[]> {
   try {

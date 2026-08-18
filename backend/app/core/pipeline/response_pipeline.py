@@ -22,6 +22,14 @@ logger = logging.getLogger(__name__)
 settings = get_settings()
 
 
+def sse_wrap(events):
+    """Encode pipeline event dicts into Server-Sent-Events ``data:`` frames."""
+    import json
+
+    for event in events:
+        yield f"data: {json.dumps(event)}\n\n"
+
+
 class ResponsePipeline:
     def __init__(
         self,
@@ -124,30 +132,34 @@ class ResponsePipeline:
                 completion_tokens=completion_tokens,
                 total_tokens=prompt_tokens + completion_tokens,
                 cost=estimate_cost_paise(model, prompt_tokens, completion_tokens),
+                time_to_first_token_ms=usage.get("time_to_first_token_ms"),
+                total_latency_ms=usage.get("total_latency_ms"),
             )
         )
 
-    def run(
+    def _prepare_context(
         self,
         query: str,
         session_id: str,
-        organization_id: str | UUID,
-        chatbot_id: str | UUID | None = None,
-        behaviour: str = "balanced",
-        db: Session | None = None,
-        policies: list[Policy] | None = None,
-        reranker_enabled: bool | None = None,
+        org_id_str: str,
+        chatbot_id_str: str | None,
+        policies: list[Policy] | None,
+        reranker_enabled: bool | None,
     ) -> dict:
-        org_id_str = str(organization_id)
-        chatbot_id_str = str(chatbot_id) if chatbot_id else None
+        """Run the pre-generation stages shared by run() and run_stream().
 
+        Handles response caching, retrieval, context building and session
+        memory. Returns a dict with either a cached reply or the prepared
+        generation inputs (messages, retrieved_chunks) plus per-stage timings
+        in milliseconds.
+        """
         timings: dict[str, float] = {}
 
         _t0 = time.perf_counter()
         cached = self.opt_memory.get_cached_response(query, org_id_str)
         timings["cache_lookup"] = (time.perf_counter() - _t0) * 1000
         if cached:
-            return {"reply": cached, "cached": True, "session_id": session_id, "timings": timings}
+            return {"cached": True, "reply": cached, "timings": timings}
 
         _t0 = time.perf_counter()
         retrieved_chunks = self.knowledge_memory.get_cached_chunks(
@@ -188,6 +200,39 @@ class ResponsePipeline:
 
         self.session_memory.add_message(session_id, "user", query)
         timings["session_memory"] = (time.perf_counter() - _t0) * 1000
+
+        return {
+            "cached": False,
+            "messages": messages,
+            "retrieved_chunks": retrieved_chunks,
+            "timings": timings,
+        }
+
+    def run(
+        self,
+        query: str,
+        session_id: str,
+        organization_id: str | UUID,
+        chatbot_id: str | UUID | None = None,
+        behaviour: str = "balanced",
+        db: Session | None = None,
+        policies: list[Policy] | None = None,
+        reranker_enabled: bool | None = None,
+    ) -> dict:
+        org_id_str = str(organization_id)
+        chatbot_id_str = str(chatbot_id) if chatbot_id else None
+
+        timings: dict[str, float] = {}
+
+        prep = self._prepare_context(
+            query, session_id, org_id_str, chatbot_id_str, policies, reranker_enabled
+        )
+        timings.update(prep["timings"])
+        if prep["cached"]:
+            return {"reply": prep["reply"], "cached": True, "session_id": session_id, "timings": timings}
+
+        messages = prep["messages"]
+        retrieved_chunks = prep["retrieved_chunks"]
 
         _t0 = time.perf_counter()
         reply = self.ai.generate(messages)
@@ -231,3 +276,119 @@ class ResponsePipeline:
 
         timings["total"] = sum(v for v in timings.values())
         return {"reply": reply, "cached": False, "session_id": session_id, "timings": timings}
+
+    def run_stream(
+        self,
+        query: str,
+        session_id: str,
+        organization_id: str | UUID,
+        chatbot_id: str | UUID | None = None,
+        behaviour: str = "balanced",
+        db: Session | None = None,
+        policies: list[Policy] | None = None,
+        reranker_enabled: bool | None = None,
+    ):
+        """Streaming variant of run().
+
+        Runs the pre-generation stages (cache, retrieval, context, memory)
+        synchronously, then yields SSE-style event dicts as the LLM tokens
+        arrive:
+
+        - {"type": "meta", "session_id": ...}
+        - {"type": "token", "content": <delta>}
+        - {"type": "notice", "message": ...}   # post-hoc safety filter applied
+        - {"type": "error", "message": ...}    # stream broke mid-response
+        - {"type": "done", "reply": ..., "time_to_first_token_ms": ...,
+           "total_latency_ms": ..., "usage": ..., "timings": ...}
+
+        Degradation semantics: if the provider stream breaks mid-response the
+        caller keeps whatever tokens already arrived (surfaced via an ``error``
+        event and ``stream_error`` on ``done``); the response is never frozen
+        silently. Because tokens are already visible to the client, post-hoc
+        validation/safety failures are logged and surfaced as a ``notice``
+        rather than silently swapped for a refusal.
+        """
+        org_id_str = str(organization_id)
+        chatbot_id_str = str(chatbot_id) if chatbot_id else None
+
+        prep = self._prepare_context(
+            query, session_id, org_id_str, chatbot_id_str, policies, reranker_enabled
+        )
+        timings = prep["timings"]
+        yield {"type": "meta", "session_id": session_id}
+
+        if prep["cached"]:
+            yield {
+                "type": "done",
+                "reply": prep["reply"],
+                "cached": True,
+                "usage": None,
+                "timings": timings,
+            }
+            return
+
+        messages = prep["messages"]
+        retrieved_chunks = prep["retrieved_chunks"]
+
+        llm_start = time.perf_counter()
+        ttft: float | None = None
+        chunks: list[str] = []
+        for delta in self.ai.generate_stream(messages):
+            if ttft is None:
+                ttft = (time.perf_counter() - llm_start) * 1000
+            if delta:
+                chunks.append(delta)
+                yield {"type": "token", "content": delta}
+        total_latency_ms = (time.perf_counter() - llm_start) * 1000
+        stream_error = bool(getattr(self.ai, "last_stream_error", False))
+        reply = "".join(chunks)
+
+        # Post-generation checks against the final text (best-effort for
+        # streamed content; see docstring for the degradation rationale).
+        notice: str | None = None
+        is_valid, issues = self.validator.validate_against_context(
+            reply, retrieved_chunks
+        )
+        if not is_valid:
+            logger.warning("Streamed response validation failed: %s", issues)
+        is_safe, _ = self.validator.validate_safety(reply)
+        post_safe, post_issue = self._check_post_generation_safety(reply, org_id_str)
+        if not (is_safe and post_safe):
+            logger.warning(
+                "Streamed response failed safety checks%s", f": {post_issue}" if post_issue else ""
+            )
+            notice = "Response did not pass safety filters."
+        reply = self.sanitizer.sanitize(reply)
+
+        usage = getattr(self.ai, "last_usage", None) or {}
+        usage["time_to_first_token_ms"] = round(ttft or 0, 2)
+        usage["total_latency_ms"] = round(total_latency_ms, 2)
+        self.ai.last_usage = usage
+        self._record_usage(db, org_id_str, chatbot_id_str)
+
+        self.session_memory.add_message(session_id, "assistant", reply)
+        self.opt_memory.cache_response(query, org_id_str, reply)
+
+        from app.core.metrics import LLM_TIME_TO_FIRST_TOKEN, LLM_TOTAL_LATENCY
+
+        if ttft is not None:
+            LLM_TIME_TO_FIRST_TOKEN.observe(ttft / 1000)
+        LLM_TOTAL_LATENCY.observe(total_latency_ms / 1000)
+
+        if notice:
+            yield {"type": "notice", "message": notice}
+        if stream_error:
+            yield {
+                "type": "error",
+                "message": "The stream ended unexpectedly; showing the partial response.",
+            }
+        yield {
+            "type": "done",
+            "reply": reply,
+            "cached": False,
+            "stream_error": stream_error,
+            "time_to_first_token_ms": round(ttft or 0, 2),
+            "total_latency_ms": round(total_latency_ms, 2),
+            "usage": usage,
+            "timings": timings,
+        }

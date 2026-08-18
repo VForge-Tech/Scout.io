@@ -20,6 +20,9 @@ class AIRouter:
         # Captured from the last successful completion: model actually used,
         # plus token counts (used by ResponsePipeline to record LLMUsage).
         self.last_usage: dict | None = None
+        # Set by generate_stream() when a provider stream breaks mid-response
+        # (the client already received partial tokens, so no fallback retry).
+        self.last_stream_error: bool = False
 
     def generate(
         self,
@@ -62,6 +65,77 @@ class AIRouter:
                 continue
 
         return self._graceful_error_response()
+
+    def generate_stream(
+        self,
+        messages: list[dict],
+        max_tokens: int | None = None,
+        temperature: float = 0.7,
+    ):
+        """Generator that yields response text chunks as they arrive.
+
+        Same fallback chain as ``generate()``, but exposes token deltas to the
+        caller so they can be streamed to the client (SSE). ``last_usage`` is
+        populated with the full accumulated content once the stream completes.
+
+        Fallback semantics differ slightly from ``generate()``:
+        - A failure before any chunk is emitted falls through to the next model.
+        - A failure *mid-stream* marks ``last_stream_error`` and stops: the
+          client already saw partial tokens, so retrying a different model
+          would produce duplicated/overlapping text. The caller keeps whatever
+          arrived.
+        """
+        self.last_usage = None
+        self.last_stream_error = False
+
+        # Load-test mode: deterministic canned reply, no provider call.
+        if settings.mock_llm:
+            yield self._mock_generate(messages, max_tokens)
+            return
+
+        fallback_models = get_fallback_chain(self.primary_model)
+
+        for model in fallback_models:
+            try:
+                response = litellm_completion(
+                    model=model,
+                    messages=messages,
+                    max_tokens=max_tokens or self.max_tokens,
+                    temperature=temperature,
+                    stream=True,
+                )
+            except Exception as e:
+                logger.warning("Model %s failed to start streaming: %s, trying fallback", model, e)
+                LLM_FALLBACK_TRIGGERS.labels(
+                    primary_model=self.primary_model, fallback_model=model
+                ).inc()
+                continue
+
+            chunks: list[str] = []
+            try:
+                for chunk in response:
+                    choices = getattr(chunk, "choices", None) or []
+                    if not choices:
+                        continue
+                    delta = getattr(choices[0], "delta", None)
+                    content = getattr(delta, "content", None) or ""
+                    if content:
+                        chunks.append(content)
+                        yield content
+            except Exception as e:
+                logger.warning("Model %s stream broke mid-response: %s", model, e)
+                LLM_FALLBACK_TRIGGERS.labels(
+                    primary_model=self.primary_model, fallback_model=model
+                ).inc()
+                self.last_stream_error = True
+                return
+
+            content = "".join(chunks)
+            if content:
+                self.last_usage = self._capture_usage(model, messages, content, response)
+                return
+
+        yield self._graceful_error_response()
 
     def _mock_generate(self, messages: list[dict], max_tokens: int | None) -> str:
         """Deterministic canned reply for MOCK_LLM load-test mode.

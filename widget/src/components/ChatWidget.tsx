@@ -2,6 +2,7 @@ import React, { useState, useEffect, useRef, useCallback } from 'react';
 import { ThemeProvider, useTheme, Theme } from './ThemeProvider';
 import { MessageList } from './MessageList';
 import { InputBox } from './InputBox';
+import { consumeSSE } from '../lib/sse';
 import type { CSSProperties } from 'react';
 
 export interface ChatWidgetProps {
@@ -105,9 +106,11 @@ const ChatWidgetInner: React.FC<ChatWidgetProps> = ({
   }, [apiUrl, chatbotId, onError]);
 
   const sendMessage = useCallback(async (content: string) => {
-    if (!session) {
+    let currentSession = session;
+    if (!currentSession) {
       const newSession = await createSession();
       if (!newSession) return;
+      currentSession = newSession;
     }
 
     const userMessage: Message = {
@@ -121,51 +124,103 @@ const ChatWidgetInner: React.FC<ChatWidgetProps> = ({
     setError(null);
     onMessageSent?.(content);
 
+    let botId: string | null = null;
+    let streamed = '';
+    let delivered = false;
+
+    const appendToken = (delta: string) => {
+      streamed += delta;
+      if (!botId) {
+        botId = generateId();
+        setMessages((prev) => [
+          ...prev,
+          { id: botId!, role: 'assistant', content: streamed, timestamp: new Date() },
+        ]);
+      } else {
+        setMessages((prev) =>
+          prev.map((m) => (m.id === botId ? { ...m, content: streamed } : m)),
+        );
+      }
+    };
+
+    const finalizeBot = (reply: string) => {
+      streamed = reply;
+      if (!botId) {
+        botId = generateId();
+        setMessages((prev) => [
+          ...prev,
+          { id: botId!, role: 'assistant', content: reply, timestamp: new Date() },
+        ]);
+      } else {
+        setMessages((prev) =>
+          prev.map((m) => (m.id === botId ? { ...m, content: reply } : m)),
+        );
+      }
+    };
+
     try {
-      const res = await fetch(`${apiUrl}/api/v1/widget/messages`, {
-        method: 'POST',
-        headers: {
-          'Content-Type': 'application/json',
-          Authorization: `Bearer ${session?.token}`,
+      await consumeSSE(
+        `${apiUrl}/api/v1/widget/messages/stream`,
+        {
+          method: 'POST',
+          headers: {
+            'Content-Type': 'application/json',
+            Authorization: `Bearer ${currentSession.token}`,
+          },
+          body: JSON.stringify({ content, metadata: {} }),
         },
-        body: JSON.stringify({ content, metadata: {} }),
-      });
-
-      if (!res.ok) {
-        const errData = await res.json().catch(() => ({}));
-        throw new Error(errData.detail || 'Failed to send message');
-      }
-
-      const data: WidgetMessageResponse = await res.json();
-
-      const botMessage: Message = {
-        id: generateId(),
-        role: 'assistant',
-        content: data.reply,
-        timestamp: new Date(),
-      };
-      setMessages((prev) => [...prev, botMessage]);
-      onMessageReceived?.(data.reply);
-
-      if (!isOpen && !isMinimized) {
-        setUnreadCount((c) => c + 1);
-      }
+        (evt) => {
+          if (evt.type === 'token') {
+            appendToken(String(evt.content ?? ''));
+          } else if (evt.type === 'done') {
+            finalizeBot(typeof evt.reply === 'string' ? evt.reply : streamed);
+            delivered = true;
+          } else if (evt.type === 'error') {
+            setError(String(evt.message ?? 'Stream error'));
+          }
+        },
+      );
     } catch (err) {
-      const errorMsg = err instanceof Error ? err.message : 'Failed to send message';
-      setError(errorMsg);
-      onError?.(err instanceof Error ? err : new Error(errorMsg));
-
-      const errorMessage: Message = {
-        id: generateId(),
-        role: 'assistant',
-        content: 'Sorry, I encountered an error. Please try again.',
-        timestamp: new Date(),
-      };
-      setMessages((prev) => [...prev, errorMessage]);
+      if (streamed) {
+        // Partial tokens already rendered — surface the break, keep the content.
+        delivered = true;
+        setError('Stream interrupted — showing partial response.');
+        onError?.(err instanceof Error ? err : new Error('Stream interrupted'));
+      } else {
+        // Nothing arrived — fall back to the non-streaming endpoint.
+        try {
+          const res = await fetch(`${apiUrl}/api/v1/widget/messages`, {
+            method: 'POST',
+            headers: {
+              'Content-Type': 'application/json',
+              Authorization: `Bearer ${currentSession.token}`,
+            },
+            body: JSON.stringify({ content, metadata: {} }),
+          });
+          if (!res.ok) {
+            const errData = await res.json().catch(() => ({}));
+            throw new Error(errData.detail || 'Failed to send message');
+          }
+          const data: WidgetMessageResponse = await res.json();
+          finalizeBot(data.reply);
+          delivered = true;
+        } catch (fallbackErr) {
+          const errorMsg = fallbackErr instanceof Error ? fallbackErr.message : 'Failed to send message';
+          setError(errorMsg);
+          onError?.(fallbackErr instanceof Error ? fallbackErr : new Error(errorMsg));
+          finalizeBot('Sorry, I encountered an error. Please try again.');
+        }
+      }
     } finally {
       setIsLoading(false);
+      if (delivered) {
+        onMessageReceived?.(streamed);
+        if (!isOpen && !isMinimized) {
+          setUnreadCount((c) => c + 1);
+        }
+      }
     }
-  }, [session, apiUrl, isOpen, isMinimized, onMessageSent, onMessageReceived, onError]);
+  }, [session, apiUrl, isOpen, isMinimized, onMessageSent, onMessageReceived, onError, createSession]);
 
   const toggleWidget = () => {
     if (isMinimized) {

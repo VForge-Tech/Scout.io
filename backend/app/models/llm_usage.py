@@ -22,4 +22,6 @@ class LLMUsage(Base):
     completion_tokens = Column(Integer, default=0)
     total_tokens = Column(Integer, default=0)
     cost = Column(Integer, default=0)
+    time_to_first_token_ms = Column(Integer, nullable=True)
+    total_latency_ms = Column(Integer, nullable=True)
     timestamp = Column(DateTime(timezone=True), server_default=func.now(), nullable=False)

@@ -6,7 +6,7 @@ from sqlalchemy.orm import Session
 from app.api.deps import get_db, optional_current_user
 from app.core.billing.limits import assert_message_quota
 from app.core.config import get_settings
-from app.core.pipeline.response_pipeline import ResponsePipeline
+from app.core.pipeline.response_pipeline import ResponsePipeline, sse_wrap
 from app.core.rate_limit import limiter, widget_org_key
 from app.core.security import create_access_token, decode_token
 from app.db.session import get_db as get_db_base
@@ -63,6 +63,23 @@ def get_widget_session(
     db.execute(text("SET LOCAL app.current_org_id = :oid"), {"oid": str(session.organization_id)})
 
     return session
+
+
+def _chatbot_context(db: Session, session: SessionModel) -> tuple:
+    """Load the session's chatbot and its applicable policies for the pipeline."""
+    chatbot = db.query(Chatbot).filter(Chatbot.id == session.chatbot_id).first()
+    policies = (
+        db.query(Policy)
+        .filter(
+            Policy.organization_id == session.organization_id,
+            (Policy.chatbot_id == session.chatbot_id) | (Policy.chatbot_id.is_(None)),
+        )
+        .all()
+    ) if chatbot else []
+    reranker_enabled = (
+        chatbot.config.get("reranker_enabled") if chatbot and chatbot.config else None
+    )
+    return chatbot, policies, reranker_enabled
 
 
 @router.post("/sessions", response_model=WidgetSessionResponse)
@@ -125,15 +142,7 @@ def send_widget_message(
     db.add(user_msg)
     db.commit()
 
-    chatbot = db.query(Chatbot).filter(Chatbot.id == session.chatbot_id).first()
-    policies = (
-        db.query(Policy)
-        .filter(
-            Policy.organization_id == session.organization_id,
-            (Policy.chatbot_id == session.chatbot_id) | (Policy.chatbot_id.is_(None)),
-        )
-        .all()
-    ) if chatbot else []
+    chatbot, policies, reranker_enabled = _chatbot_context(db, session)
 
     pipeline = ResponsePipeline()
     result = pipeline.run(
@@ -144,9 +153,7 @@ def send_widget_message(
         behaviour=chatbot.behaviour if chatbot else "balanced",
         db=db,
         policies=policies,
-        reranker_enabled=(
-            chatbot.config.get("reranker_enabled") if chatbot and chatbot.config else None
-        ),
+        reranker_enabled=reranker_enabled,
     )
 
     # Expose per-stage pipeline timing (ms) to load-test clients via a header.
@@ -168,4 +175,59 @@ def send_widget_message(
     return WidgetMessageResponse(
         reply=result["reply"],
         session_id=str(session.id),
+    )
+
+
+@router.post("/messages/stream")
+@limiter.limit(lambda: get_settings().rate_limit_per_org, key_func=widget_org_key)
+def send_widget_message_stream(
+    payload: WidgetMessageRequest,
+    request: Request,
+    response: Response,
+    db: Session = Depends(get_db),
+    session: SessionModel = Depends(get_widget_session),
+):
+    """Streaming variant of ``POST /messages``.
+
+    Returns a Server-Sent-Events (text/event-stream) response. Events are
+    JSON-encoded ``data:`` frames: ``meta``, ``token`` (per LLM delta),
+    optionally ``notice``/``error``, and a final ``done`` carrying the reply,
+    time-to-first-token and total latency. See ResponsePipeline.run_stream().
+    """
+    from fastapi.responses import StreamingResponse
+
+    org = db.query(Organization).filter(Organization.id == session.organization_id).first()
+    assert_message_quota(db, org)
+
+    user_msg = Message(
+        session_id=session.id,
+        role="user",
+        content=payload.content,
+        metadata_=payload.metadata,
+    )
+    db.add(user_msg)
+    db.commit()
+
+    chatbot, policies, reranker_enabled = _chatbot_context(db, session)
+
+    pipeline = ResponsePipeline()
+    return StreamingResponse(
+        sse_wrap(
+            pipeline.run_stream(
+                query=payload.content,
+                session_id=str(session.id),
+                organization_id=str(session.organization_id),
+                chatbot_id=str(session.chatbot_id) if session.chatbot_id else None,
+                behaviour=chatbot.behaviour if chatbot else "balanced",
+                db=db,
+                policies=policies,
+                reranker_enabled=reranker_enabled,
+            )
+        ),
+        media_type="text/event-stream",
+        headers={
+            "Cache-Control": "no-cache",
+            "Connection": "keep-alive",
+            "X-Accel-Buffering": "no",
+        },
     )

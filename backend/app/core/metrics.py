@@ -77,6 +77,18 @@ RERANKER_FALLBACKS = Counter(
     "fell back to Qdrant's original similarity ranking",
 )
 
+LLM_TIME_TO_FIRST_TOKEN = Histogram(
+    "scout_llm_time_to_first_token_seconds",
+    "Seconds from the start of LLM generation to the first streamed token",
+    buckets=(0.05, 0.1, 0.25, 0.5, 1.0, 2.5, 5.0, 10.0, 30.0, 60.0),
+)
+
+LLM_TOTAL_LATENCY = Histogram(
+    "scout_llm_total_latency_seconds",
+    "Total seconds of LLM streaming generation, from request start to completion",
+    buckets=(0.1, 0.25, 0.5, 1.0, 2.5, 5.0, 10.0, 30.0, 60.0, 120.0),
+)
+
 # ---------------------------------------------------------------------------
 # Celery signals (task success / failure)
 # ---------------------------------------------------------------------------

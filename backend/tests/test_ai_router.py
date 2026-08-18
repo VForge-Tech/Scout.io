@@ -87,3 +87,69 @@ def test_count_tokens(mock_litellm):
     router = AIRouter(behaviour="balanced")
     count = router.count_tokens("Hello world")
     assert count > 0
+
+
+def _stream_chunk(text: str):
+    return MagicMock(choices=[MagicMock(delta=MagicMock(content=text))])
+
+
+def test_generate_stream_yields_tokens():
+    with patch("app.core.ai.router.litellm_completion") as mock:
+        mock.return_value = iter([_stream_chunk("Hello"), _stream_chunk(" world")])
+        router = AIRouter(behaviour="balanced")
+        out = list(router.generate_stream([{"role": "user", "content": "Hi"}]))
+        assert out == ["Hello", " world"]
+        assert router.last_stream_error is False
+        assert router.last_usage and router.last_usage["total_tokens"] is not None
+
+
+def test_generate_stream_mock_mode():
+    from app.core.config import get_settings
+
+    settings = get_settings()
+    orig = settings.mock_llm
+    settings.mock_llm = True
+    try:
+        with patch("app.core.ai.router.litellm_completion") as mock:
+            router = AIRouter(behaviour="balanced")
+            out = list(router.generate_stream([{"role": "user", "content": "hi"}]))
+            assert len(out) == 1
+            assert "[mock]" in out[0]
+            mock.assert_not_called()
+    finally:
+        settings.mock_llm = orig
+
+
+def test_generate_stream_start_failure_falls_back():
+    with patch("app.core.ai.router.litellm_completion") as mock:
+        mock.side_effect = [
+            Exception("start fail"),
+            iter([_stream_chunk("Fallback"), _stream_chunk("!")]),
+        ]
+        router = AIRouter(behaviour="balanced")
+        out = list(router.generate_stream([{"role": "user", "content": "Hi"}]))
+        assert out == ["Fallback", "!"]
+        assert router.last_stream_error is False
+        assert router.last_usage and router.last_usage["model"] is not None
+
+
+def test_generate_stream_mid_stream_failure_stops_and_marks_error():
+    def broken():
+        yield _stream_chunk("Partial")
+        raise Exception("mid-stream boom")
+
+    with patch("app.core.ai.router.litellm_completion") as mock:
+        mock.return_value = broken()
+        router = AIRouter(behaviour="balanced")
+        out = list(router.generate_stream([{"role": "user", "content": "Hi"}]))
+        # Only the already-emitted token is returned; no fallback retry.
+        assert out == ["Partial"]
+        assert router.last_stream_error is True
+
+
+def test_generate_stream_all_fail_graceful():
+    with patch("app.core.ai.router.litellm_completion") as mock:
+        mock.side_effect = Exception("all failed")
+        router = AIRouter(behaviour="balanced")
+        out = list(router.generate_stream([{"role": "user", "content": "Hi"}]))
+        assert "trouble" in "".join(out).lower()

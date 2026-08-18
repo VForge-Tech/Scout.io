@@ -72,11 +72,11 @@ cd backend
 python -m pytest tests/ -v --tb=short
 ```
 
-The current suite is **223 passing, 8 skipped** (the skipped tests are
+The current suite is **233 passing, 8 skipped** (the skipped tests are
 Postgres-only RLS tests). Coverage includes auth, orgs/users, chatbots,
 policies, knowledge sources, widget API, admin, developer portal, the AI/RAG
-pipeline, validation/sanitization, analytics, MFA, billing, RLS, health checks,
-onboarding, and load-test hooks.
+pipeline (including SSE streaming), validation/sanitization, analytics, MFA,
+billing, RLS, health checks, onboarding, and load-test hooks.
 
 ## Option B — Full stack with Docker (recommended)
 

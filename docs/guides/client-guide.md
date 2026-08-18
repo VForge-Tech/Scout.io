@@ -122,6 +122,24 @@ End users then chat with your chatbot through the widget. See
 `docs/guides/developer-portal-guide.md` for the full integration options
 (position, colors, welcome message, events).
 
+### What end users see
+
+Replies stream into the chat **token by token** as they're generated, just like a
+live assistant — they don't wait for the whole answer before anything appears. A
+small typing indicator shows while the first token is being prepared. If a
+provider hiccups mid-answer, the widget keeps the text that already arrived and
+shows a short note rather than freezing; if nothing arrived yet it quietly retries
+the non-streaming path.
+
+### Testing streaming yourself
+
+The **Streaming Playground** (`/dashboard/playground`) lets you send a test
+message against any of your chatbots and watch the exact same token-by-token
+behavior your end users will see — including a **time-to-first-token** and
+**total-latency** readout. Those latency figures are also stored per request
+(`llm_usage`) and exposed as Prometheus metrics, so you can monitor how fast your
+chatbots respond over time.
+
 ## Getting help
 
 - API reference: `docs/guides/developer-portal-guide.md`

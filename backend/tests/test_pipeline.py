@@ -83,3 +83,61 @@ def test_pipeline_with_policies(pipeline, mock_redis_client):
         policies=[policy],
     )
     assert result["reply"] is not None
+
+
+def test_pipeline_run_stream_yields_tokens_and_done(pipeline, mock_redis_client):
+    mock_redis_client.get.return_value = None
+    mock_redis_client.lrange.return_value = []
+    with patch.object(pipeline.ai, "generate_stream", return_value=iter(["Hel", "lo"])):
+        events = list(
+            pipeline.run_stream(
+                query="What is Scout?",
+                session_id="test-session-stream-1",
+                organization_id="org-1",
+                chatbot_id="bot-1",
+            )
+        )
+    types = [e["type"] for e in events]
+    assert types[0] == "meta"
+    assert "token" in types
+    assert types[-1] == "done"
+    done = events[-1]
+    assert done["reply"] == "Hello"
+    assert "time_to_first_token_ms" in done
+    assert "total_latency_ms" in done
+    assert done["cached"] is False
+
+
+def test_pipeline_run_stream_cached(pipeline, mock_redis_client):
+    mock_redis_client.get.return_value = b"Cached stream reply"
+    events = list(
+        pipeline.run_stream(
+            query="q",
+            session_id="s",
+            organization_id="org-1",
+        )
+    )
+    types = [e["type"] for e in events]
+    assert types == ["meta", "done"]
+    assert events[-1]["reply"] == "Cached stream reply"
+    assert events[-1]["cached"] is True
+
+
+def test_pipeline_run_stream_partial_on_error(pipeline, mock_redis_client):
+    mock_redis_client.get.return_value = None
+    mock_redis_client.lrange.return_value = []
+    with patch.object(
+        pipeline.ai, "generate_stream", return_value=iter(["Part"])
+    ), patch.object(pipeline.ai, "last_stream_error", True, create=True):
+        events = list(
+            pipeline.run_stream(
+                query="q",
+                session_id="s",
+                organization_id="org-1",
+            )
+        )
+    types = [e["type"] for e in events]
+    assert "error" in types
+    done = events[-1]
+    assert done["reply"] == "Part"
+    assert done["stream_error"] is True

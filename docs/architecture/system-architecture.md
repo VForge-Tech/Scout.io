@@ -452,9 +452,70 @@ Customers should never receive:
 
 - Internal source metadata. 
 
-- Organizational configurations. 
+- Organizational configurations.
 
-## Session Manager 
+## Streaming Responses (SSE)
+
+Responses are exposed to the client as token-by-token streams over
+Server-Sent-Events (`text/event-stream`), matching how end users actually see
+the reply arrive in the widget. The streaming capability already existed in the
+AI Router (it consumed the provider stream internally); this design *exposes* it
+rather than rebuilding generation.
+
+### Endpoints
+
+- `POST /api/v1/widget/messages/stream` — public widget path (widget session
+  token, per-org rate limit).
+- `POST /api/v1/chatbots/{id}/messages/stream` — org-authenticated path used by
+  the dashboard **Streaming Playground**; runs the same pipeline under the
+  caller's RLS context.
+
+Both return `text/event-stream` with JSON `data:` frames:
+
+| Event | Payload |
+|-------|---------|
+| `meta` | `{session_id}` |
+| `token` | `{content}` — one frame per LLM delta |
+| `notice` | `{message}` — post-hoc safety filter applied to already-streamed text |
+| `error` | `{message}` — provider stream broke mid-response |
+| `done` | `{reply, time_to_first_token_ms, total_latency_ms, usage, timings}` |
+
+### Pipeline
+
+`ResponsePipeline.run_stream()` runs the pre-generation stages synchronously
+(cache lookup, retrieval, context build, session memory) and then iterates the
+AI Router's `generate_stream()` generator, yielding `token` events as chunks
+arrive. On completion it records an `LLMUsage` row (now including
+`time_to_first_token_ms` and `total_latency_ms`), caches the response, and emits
+`done`.
+
+### Degradation semantics
+
+- **Mid-stream provider failure**: the router marks `last_stream_error` and stops
+  (retrying another model would duplicate already-shown text). The client keeps
+  whatever tokens arrived; an `error` event and `stream_error: true` on `done`
+  surface the break — the response never silently freezes.
+- **Start failure before any chunk**: the router falls through its fallback model
+  chain as usual.
+- **Safety/validation on streamed text**: tokens are already visible, so a failed
+  post-hoc check is logged and surfaced as a `notice` instead of silently
+  swapping the reply for a refusal.
+- **Widget fallback**: if the stream request fails before any token, the widget
+  retries the non-streaming `POST /widget/messages`; if tokens already arrived it
+  keeps the partial content.
+- **MOCK_LLM mode**: emits the whole canned reply as a single `token` event (no
+  provider call), so the playground/widget still complete.
+
+### Observability
+
+- `scout_llm_time_to_first_token_seconds` and `scout_llm_total_latency_seconds`
+  Prometheus histograms (`app/core/metrics.py`) expose streaming latency for the
+  fallback-debugging dashboard and general analytics.
+- Per-request TTFT/total latency are persisted per generation on `llm_usage`
+  (columns added by alembic revision `0010`), so historical latency is available
+  to analytics alongside token/cost data.
+
+## Session Manager
 
 Responsible for: 
 

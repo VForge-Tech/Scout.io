@@ -6,6 +6,7 @@ const dashboardItems = [
   { label: 'Chatbots', href: '/dashboard/chatbots', icon: '🤖' },
   { label: 'Knowledge Sources', href: '/dashboard/knowledge-sources', icon: '📚' },
   { label: 'Policies', href: '/dashboard/policies', icon: '🛡️' },
+  { label: 'Playground', href: '/dashboard/playground', icon: '🧪' },
   { label: 'Analytics', href: '/dashboard/analytics', icon: '📈' },
   { label: 'Team', href: '/dashboard/team', icon: '👥' },
   { label: 'Billing', href: '/dashboard/billing', icon: '💳' },
