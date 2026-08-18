@@ -17,7 +17,7 @@ param(
 $ErrorActionPreference = "Stop"
 
 $ComposeFile = "docker/docker-compose.quickstart.yml"
-$Profile = "quick-start"
+$ComposeProfile = "quick-start"
 $DemoEmail = "demo@scout.io"
 $DemoPassword = "DemoPass123!"
 
@@ -108,7 +108,7 @@ Write-EnvIfMissing -Path "frontend\.env" -Content $FrontendEnv
 
 # ─── Bring up the stack ──────────────────────────────────────────────────────
 Write-Log "Building and starting the quick-start profile (first build can take a few minutes)"
-docker compose -f $ComposeFile --profile $Profile up -d --build
+docker compose -f $ComposeFile --profile $ComposeProfile up -d --build
 if ($LASTEXITCODE -ne 0) { Die "docker compose up failed. See output above." }
 
 # ─── Wait for /health/ready ──────────────────────────────────────────────────
@@ -124,13 +124,13 @@ for ($i = 0; $i -lt 120; $i++) {
   Start-Sleep -Seconds 2
 }
 if (-not $ready) {
-  Die "Timed out waiting for /health/ready. Run: docker compose -f $ComposeFile --profile $Profile logs backend"
+  Die "Timed out waiting for /health/ready. Run: docker compose -f $ComposeFile --profile $ComposeProfile logs backend"
 }
 Write-Log "Backend is healthy."
 
 # ─── Seed demo data ──────────────────────────────────────────────────────────
 Write-Log "Seeding demo organization + chatbot (this triggers a knowledge-source sync)"
-docker compose -f $ComposeFile --profile $Profile exec -T backend python scripts/seed_demo.py
+docker compose -f $ComposeFile --profile $ComposeProfile exec -T backend python scripts/seed_demo.py
 if ($LASTEXITCODE -ne 0) { Die "Seeding failed. See output above." }
 
 # ─── Summary ─────────────────────────────────────────────────────────────────
