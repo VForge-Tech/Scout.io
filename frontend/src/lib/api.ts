@@ -3,6 +3,19 @@ export function resolveApiBase(raw?: string): string {
   return trimmed.endsWith('/api/v1') ? trimmed : `${trimmed}/api/v1`;
 }
 
+function getBasePath(): string {
+  if (typeof window === 'undefined') return '';
+  return (window as any).__NEXT_BASE_PATH__ || 
+         (process.env.NEXT_PUBLIC_BASE_PATH || '');
+}
+
+function redirectToLogin(): void {
+  if (typeof window !== 'undefined') {
+    const basePath = getBasePath();
+    window.location.href = `${basePath}/auth/login`;
+  }
+}
+
 export async function extractApiError(res: Response): Promise<string> {
   const text = await res.text().catch(() => '');
   if (!text) return `Request failed (${res.status} ${res.statusText})`;
@@ -53,12 +66,11 @@ async function request<T>(path: string, options: RequestOptions = {}): Promise<T
 
   if (!res.ok) {
     const error = await res.json().catch(() => ({ detail: res.statusText }));
-    // Handle auth errors
     if (res.status === 401 || res.status === 403) {
       if (typeof window !== 'undefined') {
         localStorage.removeItem('access_token');
         localStorage.removeItem('refresh_token');
-        window.location.href = '/auth/login';
+        redirectToLogin();
       }
     }
     throw new Error(error.detail || 'Request failed');

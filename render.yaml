@@ -1,0 +1,128 @@
+# Render.com Blueprint for Scout.io
+# Deploy: connect this repo to Render -> New Blueprint Instance
+
+services:
+  # Backend API
+  - type: web
+    name: scout-backend
+    runtime: docker
+    dockerfilePath: ./backend/Dockerfile
+    region: oregon
+    plan: free
+    envVars:
+      - key: DEPLOYMENT_ENV
+        value: development
+      - key: DEPLOYMENT_PROFILE
+        value: quick-start
+      - key: MOCK_LLM
+        value: "false"
+      - key: BILLING_ENABLED
+        value: "false"
+      - key: QDRANT_ENABLED
+        value: "false"
+      - key: PGVECTOR_ENABLED
+        value: "true"
+      - key: CELERY_ENABLED
+        value: "true"
+      - key: EMBEDDING_MODEL
+        value: gemini/text-embedding-004
+      - key: EMBEDDING_DIMENSION
+        value: "768"
+      - key: FAST_LLM_MODEL
+        value: gemini/gemini-1.5-flash
+      - key: BALANCED_LLM_MODEL
+        value: gemini/gemini-1.5-flash
+      - key: ACCURATE_LLM_MODEL
+        value: gemini/gemini-1.5-flash
+      - key: RATE_LIMIT_PER_IP
+        value: 100/minute
+      - key: RATE_LIMIT_PER_ORG
+        value: 1000/minute
+      - key: JWT_ALGORITHM
+        value: HS256
+      - key: JWT_EXPIRATION_MINUTES
+        value: "1440"
+      - key: JWT_REFRESH_EXPIRE_DAYS
+        value: "7"
+      - key: MAX_CONTEXT_TOKENS
+        value: "4096"
+      - key: MAX_RESPONSE_TOKENS
+        value: "1024"
+      - key: TOP_K_RETRIEVAL
+        value: "5"
+      - key: REDIS_SESSION_TTL_SECONDS
+        value: "3600"
+      - key: REDIS_KNOWLEDGE_CACHE_TTL
+        value: "300"
+      - key: REDIS_OPTIMIZATION_CACHE_TTL
+        value: "600"
+      # Secrets (set in Render dashboard after first deploy):
+      - key: DATABASE_URL
+        sync: false
+      - key: REDIS_URL
+        sync: false
+      - key: CELERY_BROKER_URL
+        sync: false
+      - key: CELERY_RESULT_BACKEND
+        sync: false
+      - key: JWT_SECRET
+        sync: false
+      - key: GEMINI_API_KEY
+        sync: false
+      - key: CORS_ORIGINS
+        value: '["https://YOUR_GITHUB_USERNAME.github.io"]'
+    startCommand: sh -c "alembic upgrade head && uvicorn app.main:app --host 0.0.0.0 --port 8000"
+    healthCheckPath: /health
+    autoDeploy: true
+
+  # Celery Worker (embedding tasks)
+  - type: worker
+    name: scout-celery-worker
+    runtime: docker
+    dockerfilePath: ./backend/Dockerfile
+    region: oregon
+    plan: free
+    envVars:
+      - key: DEPLOYMENT_ENV
+        value: development
+      - key: DEPLOYMENT_PROFILE
+        value: quick-start
+      - key: MOCK_LLM
+        value: "false"
+      - key: BILLING_ENABLED
+        value: "false"
+      - key: QDRANT_ENABLED
+        value: "false"
+      - key: PGVECTOR_ENABLED
+        value: "true"
+      - key: CELERY_ENABLED
+        value: "true"
+      - key: EMBEDDING_MODEL
+        value: gemini/text-embedding-004
+      - key: EMBEDDING_DIMENSION
+        value: "768"
+      - key: FAST_LLM_MODEL
+        value: gemini/gemini-1.5-flash
+      - key: BALANCED_LLM_MODEL
+        value: gemini/gemini-1.5-flash
+      - key: ACCURATE_LLM_MODEL
+        value: gemini/gemini-1.5-flash
+      - key: JWT_ALGORITHM
+        value: HS256
+      # Secrets (set in Render dashboard):
+      - key: DATABASE_URL
+        sync: false
+      - key: REDIS_URL
+        sync: false
+      - key: CELERY_BROKER_URL
+        sync: false
+      - key: CELERY_RESULT_BACKEND
+        sync: false
+      - key: JWT_SECRET
+        sync: false
+      - key: GEMINI_API_KEY
+        sync: false
+    startCommand: celery -A app.tasks.embedding_tasks.celery_app worker --loglevel=info
+    autoDeploy: true
+
+databases: []

@@ -7,6 +7,9 @@ export default function App({ Component, pageProps }: AppProps) {
 
   useEffect(() => {
     setMounted(true);
+    if (typeof window !== 'undefined') {
+      (window as any).__NEXT_BASE_PATH__ = process.env.NEXT_PUBLIC_BASE_PATH || '';
+    }
   }, []);
 
   if (!mounted) {
