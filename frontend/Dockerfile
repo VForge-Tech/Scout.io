@@ -8,10 +8,10 @@ ARG NEXT_PUBLIC_WS_URL=ws://localhost:8000/ws
 ENV NEXT_PUBLIC_API_URL=$NEXT_PUBLIC_API_URL
 ENV NEXT_PUBLIC_WS_URL=$NEXT_PUBLIC_WS_URL
 
-COPY package*.json ./
+COPY frontend/package*.json ./
 RUN npm ci
 
-COPY . .
+COPY frontend/ .
 RUN npm run build
 
 # ─── Runtime Stage (nginx for static export) ────────────────────────────────

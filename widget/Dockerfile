@@ -2,10 +2,10 @@ FROM node:20-alpine AS builder
 
 WORKDIR /app
 
-COPY package*.json ./
+COPY widget/package*.json ./
 RUN npm ci
 
-COPY . .
+COPY widget/ .
 RUN npm run build
 
 FROM scratch AS artifact
