@@ -29,7 +29,22 @@ jobs:
         uses: actions/setup-node@v4
         with:
           node-version: '20'
-          cache: 'npm'
+
+      - name: Cache frontend dependencies
+        uses: actions/cache@v4
+        with:
+          path: frontend/node_modules
+          key: ${{ runner.os }}-frontend-${{ hashFiles('frontend/package-lock.json') }}
+          restore-keys: |
+            ${{ runner.os }}-frontend-
+
+      - name: Cache widget dependencies
+        uses: actions/cache@v4
+        with:
+          path: widget/node_modules
+          key: ${{ runner.os }}-widget-${{ hashFiles('widget/package-lock.json') }}
+          restore-keys: |
+            ${{ runner.os }}-widget-
 
       - name: Install frontend dependencies
         working-directory: frontend
