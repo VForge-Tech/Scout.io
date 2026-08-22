@@ -1,3 +1,4 @@
+# ─── Build Stage ────────────────────────────────────────────────────────────
 FROM node:20-alpine AS builder
 
 WORKDIR /app
@@ -13,17 +14,26 @@ RUN npm ci
 COPY . .
 RUN npm run build
 
-FROM node:20-alpine AS runner
+# ─── Runtime Stage (nginx for static export) ────────────────────────────────
+FROM nginx:alpine AS runner
 
-WORKDIR /app
+# Copy static export output
+COPY --from=builder /app/out /usr/share/nginx/html
 
-ENV NODE_ENV=production
-
-# Only copy public directory if it exists
-COPY --from=builder /app/.next/standalone ./
-COPY --from=builder /app/.next/static ./.next/static
-RUN mkdir -p ./public
+# SPA fallback: redirect all non-asset requests to index.html
+# (handles client-side routing for /dashboard/*, /auth/*, etc.)
+RUN echo 'server { \
+    listen 3000; \
+    root /usr/share/nginx/html; \
+    index index.html; \
+    location / { \
+        try_files $uri $uri/ /index.html; \
+    } \
+    location /widget { \
+        try_files $uri $uri/ /widget/index.html; \
+    } \
+}' > /etc/nginx/conf.d/default.conf
 
 EXPOSE 3000
 
-CMD ["node", "server.js"]
+CMD ["nginx", "-g", "daemon off;"]
