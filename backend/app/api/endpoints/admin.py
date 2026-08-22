@@ -6,7 +6,7 @@ from sqlalchemy.orm import Session
 
 from app.api.deps import get_db_admin, get_db_with_org, require_admin, require_platform_admin
 from app.domain.offboarding import OffboardingService
-from app.scripts.seed_demo import seed_demo
+from scripts.seed_demo import seed_demo
 from app.models import (
     ApiKey,
     Chatbot,
