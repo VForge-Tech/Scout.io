@@ -36,5 +36,12 @@ Thumbs.db
 Issues.md
 scout-io-phase-v-prompts.md
 
+# deployment guides (local-only, contain environment-specific config)
+docs/operations/free-tier-deployment.md
+docs/operations/local-tunnel-deployment.md
+docker/docker-compose.free-tier.yml
+docker/docker-compose.local-tunnel.yml
+docker/caddy/
+
 # Docker
 docker-data/
