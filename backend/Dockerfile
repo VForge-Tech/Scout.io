@@ -4,10 +4,10 @@ WORKDIR /app
 
 RUN pip install --no-cache-dir uv
 
-COPY requirements.txt .
+COPY backend/requirements.txt .
 RUN uv pip install --system --no-cache -r requirements.txt
 
-COPY . .
+COPY backend/ .
 
 EXPOSE 8000
 
