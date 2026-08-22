@@ -6,6 +6,7 @@ from sqlalchemy.orm import Session
 
 from app.api.deps import get_db_admin, get_db_with_org, require_admin, require_platform_admin
 from app.domain.offboarding import OffboardingService
+from app.scripts.seed_demo import seed_demo
 from app.models import (
     ApiKey,
     Chatbot,
@@ -309,3 +310,18 @@ def system_health(
     all_healthy = all(s["status"] == "healthy" for s in services.values())
 
     return {"status": "healthy" if all_healthy else "degraded", "services": services}
+
+
+@router.post("/seed")
+def seed_demo_data(
+    request: Request,
+    admin: User = Depends(require_platform_admin),
+):
+    """Run demo data seeding (platform admin only)."""
+    from app.db.session import SessionLocal
+    db = SessionLocal()
+    try:
+        result = seed_demo(db)
+        return {"status": "seeded", "details": result}
+    finally:
+        db.close()

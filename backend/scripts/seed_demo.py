@@ -50,103 +50,112 @@ def _set_admin_context(db) -> None:
         db.execute(text("SET LOCAL app.is_platform_admin = 'true'"))
 
 
-def main() -> int:
+def seed_demo(db) -> dict:
+    """Core seeding logic using provided db session. Returns result dict."""
     from sqlalchemy import func
 
     from app.core.config import get_settings
     from app.core.security import hash_password
-    from app.db.session import SessionLocal
     from app.models import Chatbot, KnowledgeSource, Organization, User
     from app.utils.audit import create_audit_log
 
     get_settings()
+    _set_admin_context(db)
+
+    org = db.query(Organization).filter(Organization.name == DEMO_ORG).first()
+    user = db.query(User).filter(User.email == DEMO_EMAIL).first()
+    chatbot = (
+        db.query(Chatbot)
+        .join(Organization)
+        .filter(Organization.name == DEMO_ORG, Chatbot.name == DEMO_CHATBOT)
+        .first()
+    )
+    source = None
+
+    if user is not None and org is not None:
+        msg = f"Demo user already exists: {DEMO_EMAIL} / {DEMO_PASSWORD}"
+        print(msg)
+        chatbot = chatbot or db.query(Chatbot).filter(
+            Chatbot.organization_id == org.id
+        ).first()
+    else:
+        org = org or Organization(name=DEMO_ORG)
+        db.add(org)
+        db.flush()
+
+        user = User(
+            email=DEMO_EMAIL,
+            hashed_password=hash_password(DEMO_PASSWORD),
+            full_name="Demo Admin",
+            organization_id=org.id,
+            role="admin",
+        )
+        db.add(user)
+        db.flush()
+
+        chatbot = Chatbot(
+            organization_id=org.id,
+            name=DEMO_CHATBOT,
+            description="Demo chatbot seeded by quick-start",
+            behaviour="balanced",
+        )
+        db.add(chatbot)
+        db.flush()
+
+        create_audit_log(
+            db,
+            action="seed.demo",
+            user_id=user.id,
+            organization_id=org.id,
+            details={"script": "seed_demo"},
+        )
+
+    source = db.query(KnowledgeSource).filter(
+        KnowledgeSource.organization_id == org.id
+    ).first()
+
+    if source is None and chatbot is not None:
+        source = KnowledgeSource(
+            organization_id=org.id,
+            chatbot_id=chatbot.id,
+            source_type="text",
+            uri=DEMO_KNOWLEDGE_TEXT,
+            sync_status="pending",
+        )
+        db.add(source)
+        db.commit()
+        print(f"Created knowledge source {source.id}")
+
+    db.commit()
+    print(f"Demo organization: {org.name}")
+    print(f"Demo chatbot: {chatbot.name if chatbot else '(none)'}")
+
+    if source is not None and source.sync_status != "completed":
+        print("Indexing demo knowledge source (in-process, no broker needed)...")
+        from app.tasks.embedding_tasks import process_knowledge_source
+
+        try:
+            result = process_knowledge_source.apply(args=[str(source.id)])
+            print(f"Ingestion result: {result.get()}")
+        except Exception as exc:  # noqa: BLE001
+            print(
+                f"Warning: knowledge-source indexing failed ({exc}). "
+                "You can retry sync later from the dashboard.",
+                file=sys.stderr,
+            )
+
+    print("Seed complete.")
+    return {"status": "seeded", "org": org.name, "chatbot": chatbot.name if chatbot else None}
+
+
+def main() -> int:
+    """CLI entry point - creates its own session."""
+    from app.db.session import SessionLocal
 
     db = SessionLocal()
     try:
-        _set_admin_context(db)
-
-        org = db.query(Organization).filter(Organization.name == DEMO_ORG).first()
-        user = db.query(User).filter(User.email == DEMO_EMAIL).first()
-        chatbot = (
-            db.query(Chatbot)
-            .join(Organization)
-            .filter(Organization.name == DEMO_ORG, Chatbot.name == DEMO_CHATBOT)
-            .first()
-        )
-        source = None
-
-        if user is not None and org is not None:
-            print(f"Demo user already exists: {DEMO_EMAIL} / {DEMO_PASSWORD}")
-            chatbot = chatbot or db.query(Chatbot).filter(
-                Chatbot.organization_id == org.id
-            ).first()
-        else:
-            org = org or Organization(name=DEMO_ORG)
-            db.add(org)
-            db.flush()
-
-            user = User(
-                email=DEMO_EMAIL,
-                hashed_password=hash_password(DEMO_PASSWORD),
-                full_name="Demo Admin",
-                organization_id=org.id,
-                role="admin",
-            )
-            db.add(user)
-            db.flush()
-
-            chatbot = Chatbot(
-                organization_id=org.id,
-                name=DEMO_CHATBOT,
-                description="Demo chatbot seeded by quick-start",
-                behaviour="balanced",
-            )
-            db.add(chatbot)
-            db.flush()
-
-            create_audit_log(
-                db,
-                action="seed.demo",
-                user_id=user.id,
-                organization_id=org.id,
-                details={"script": "seed_demo"},
-            )
-
-        source = db.query(KnowledgeSource).filter(
-            KnowledgeSource.organization_id == org.id
-        ).first()
-
-        if source is None and chatbot is not None:
-            source = KnowledgeSource(
-                organization_id=org.id,
-                chatbot_id=chatbot.id,
-                source_type="text",
-                uri=DEMO_KNOWLEDGE_TEXT,
-                sync_status="pending",
-            )
-            db.add(source)
-            db.commit()
-            print(f"Created knowledge source {source.id}")
-
-        db.commit()
-        print(f"Demo organization: {org.name}")
-        print(f"Demo chatbot: {chatbot.name if chatbot else '(none)'}")
-
-        if source is not None and source.sync_status != "completed":
-            print("Indexing demo knowledge source (in-process, no broker needed)...")
-            from app.tasks.embedding_tasks import process_knowledge_source
-
-            try:
-                result = process_knowledge_source.apply(args=[str(source.id)])
-                print(f"Ingestion result: {result.get()}")
-            except Exception as exc:  # noqa: BLE001
-                print(
-                    f"Warning: knowledge-source indexing failed ({exc}). "
-                    "You can retry sync later from the dashboard.",
-                    file=sys.stderr,
-                )
-
-        print("Seed complete.")
+        result = seed_demo(db)
+        print(f"Result: {result}")
         return 0
     except Exception as exc:  # noqa: BLE001
         print(f"Seed failed: {exc}", file=sys.stderr)
