@@ -13,12 +13,14 @@ export default function App({ Component, pageProps }: AppProps) {
       (window as any).__NEXT_BASE_PATH__ = process.env.NEXT_PUBLIC_BASE_PATH || '';
       
       // SPA GitHub Pages redirect handling
-      // https://github.com/rafgraph/spa-github-pages
-      const redirectData = sessionStorage.getItem('spa-github-pages-redirect');
-      if (redirectData) {
-        sessionStorage.removeItem('spa-github-pages-redirect');
-        const { path, search, hash } = JSON.parse(redirectData);
-        router.replace(path + search + hash, undefined, { shallow: true });
+      // Check if we were redirected from 404.html with route in query string
+      const params = new URLSearchParams(window.location.search);
+      const route = params.get('route') || params.get('path');
+      if (route) {
+        // Clean up the URL and navigate to the actual route
+        const cleanUrl = window.location.pathname + (window.location.hash || '');
+        window.history.replaceState({}, '', cleanUrl);
+        router.replace(decodeURIComponent(route) + window.location.hash, undefined, { shallow: true });
       }
     }
   }, [router]);

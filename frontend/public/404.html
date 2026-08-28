@@ -4,15 +4,17 @@
   <meta charset="utf-8">
   <title>Redirecting...</title>
   <script>
-    // SPA GitHub Pages redirect
-    // Stores the intended path and redirects to base with a marker
+    // SPA GitHub Pages redirect - standard approach
+    // Redirects to basePath with the intended route in query string as 'route' param
     (function(l) {
-      if (l.search[1] === '/' && l.search.slice(1).split('/').length > 1) {
-        const path = l.pathname.slice(1).replace(/%2F/g, '/');
-        const search = l.search.slice(1).replace(/%2F/g, '/');
-        const redirectData = { path, search, hash: l.hash };
-        sessionStorage.setItem('spa-github-pages-redirect', JSON.stringify(redirectData));
-        l.replace(l.protocol + '//' + l.hostname + (l.port ? ':' + l.port : '') + l.pathname.slice(0, l.pathname.lastIndexOf('/')) + '/?' + search + l.hash);
+      var basePath = '/Scout.io'; // GitHub Pages repo name
+      var fullPath = l.pathname;
+      
+      // Check if this is a 404 for a route under our basePath
+      if (fullPath.indexOf(basePath) === 0 && fullPath.length > basePath.length) {
+        var routePath = fullPath.slice(basePath.length);
+        // Redirect to basePath with the route in the query string as 'route' param
+        l.replace(l.protocol + '//' + l.hostname + (l.port ? ':' + l.port : '') + basePath + '/?route=' + encodeURIComponent(routePath) + l.hash);
       }
     }(window.location));
   </script>
