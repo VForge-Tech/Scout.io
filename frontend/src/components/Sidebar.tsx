@@ -15,11 +15,14 @@ interface SidebarProps {
 export default function Sidebar({ items, title }: SidebarProps) {
   const router = useRouter();
   return (
-    <aside className="w-64 bg-white shadow-sm border-r min-h-screen">
-      <div className="p-4">
-        <h2 className="text-lg font-semibold text-gray-900">{title}</h2>
+    <aside className="w-64 bg-white border-r border-gray-100 min-h-screen hidden lg:block">
+      <div className="p-4 border-b border-gray-100">
+        <h2 className="text-lg font-semibold text-gray-900 flex items-center gap-2">
+          <span className="text-amber-600">●</span>
+          {title}
+        </h2>
       </div>
-      <nav className="space-y-1 px-2">
+      <nav className="p-2 space-y-1">
         {items.map((item) => {
           const isActive =
             router.pathname === item.href ||
@@ -28,14 +31,11 @@ export default function Sidebar({ items, title }: SidebarProps) {
             <a
               key={item.href}
               href={item.href}
-              className={`block px-3 py-2 rounded-md text-sm font-medium ${
-                isActive
-                  ? 'bg-blue-50 text-blue-700'
-                  : 'text-gray-700 hover:bg-gray-50'
-              }`}
+              className={`sidebar-link ${isActive ? 'sidebar-link-active' : 'sidebar-link-inactive'}`}
             >
-              {item.icon && <span className="mr-2">{item.icon}</span>}
-              {item.label}
+              {item.icon && <span className="text-lg">{item.icon}</span>}
+              <span className="flex-1 truncate">{item.label}</span>
+              {isActive && <span className="w-1.5 h-1.5 bg-amber-500 rounded-full" />}
             </a>
           );
         })}
