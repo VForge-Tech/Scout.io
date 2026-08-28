@@ -325,3 +325,17 @@ def seed_demo_data(
         return {"status": "seeded", "details": result}
     finally:
         db.close()
+
+
+@router.post("/seed-public")
+def seed_demo_public(
+    request: Request,
+):
+    """Run demo data seeding (public - for initial setup only)."""
+    from app.db.session import SessionLocal
+    db = SessionLocal()
+    try:
+        result = seed_demo(db)
+        return {"status": "seeded", "details": result}
+    finally:
+        db.close()
