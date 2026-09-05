@@ -1,9 +1,8 @@
 import hashlib
 import json
 
-import redis
-
 from app.core.config import get_settings
+from app.core.redis_pool import get_redis_client
 
 settings = get_settings()
 
@@ -14,8 +13,8 @@ class KnowledgeMemory:
             self.client = None
             self.ttl = settings.redis_knowledge_cache_ttl
             return
-            
-        self.client = redis_client or redis.from_url(settings.redis_url)
+
+        self.client = redis_client or get_redis_client()
         self.ttl = settings.redis_knowledge_cache_ttl
 
     def _make_key(self, query: str, organization_id: str, chatbot_id: str | None = None) -> str:

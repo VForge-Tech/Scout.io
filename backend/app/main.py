@@ -10,6 +10,7 @@ from slowapi.middleware import SlowAPIMiddleware
 
 from app.api.router import api_router
 from app.core.config import get_settings
+from app.core.middleware import RequestSizeLimitMiddleware, SecurityHeadersMiddleware
 from app.core.rate_limit import limiter
 from app.core.secrets import init_secret_manager
 
@@ -53,6 +54,12 @@ from slowapi.util import get_remote_address
 app.state.limiter = limiter
 app.add_exception_handler(RateLimitExceeded, _rate_limit_exceeded_handler)
 app.add_middleware(SlowAPIMiddleware)
+
+# Security: Request size limit (10 MB)
+app.add_middleware(RequestSizeLimitMiddleware, max_size=10 * 1024 * 1024)
+
+# Security: Security headers (CSP, HSTS, etc.)
+app.add_middleware(SecurityHeadersMiddleware)
 
 # Tracing
 from app.core.tracing import setup_tracing

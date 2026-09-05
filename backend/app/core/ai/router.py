@@ -1,4 +1,5 @@
 import logging
+import asyncio
 
 import litellm
 from litellm import completion as litellm_completion
@@ -9,6 +10,9 @@ from app.core.metrics import LLM_FALLBACK_TRIGGERS
 
 logger = logging.getLogger(__name__)
 settings = get_settings()
+
+# Default timeout for LLM calls (30 seconds)
+LLM_TIMEOUT = 30.0
 
 
 class AIRouter:
@@ -47,6 +51,7 @@ class AIRouter:
                     max_tokens=max_tokens or self.max_tokens,
                     temperature=temperature,
                     stream=stream,
+                    timeout=LLM_TIMEOUT,
                 )
                 if stream:
                     content = self._handle_stream(response)
@@ -103,6 +108,7 @@ class AIRouter:
                     max_tokens=max_tokens or self.max_tokens,
                     temperature=temperature,
                     stream=True,
+                    timeout=LLM_TIMEOUT,
                 )
             except Exception as e:
                 logger.warning("Model %s failed to start streaming: %s, trying fallback", model, e)

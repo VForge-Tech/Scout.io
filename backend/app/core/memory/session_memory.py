@@ -1,8 +1,7 @@
 import json
 
-import redis
-
 from app.core.config import get_settings
+from app.core.redis_pool import get_redis_client
 
 settings = get_settings()
 
@@ -26,8 +25,8 @@ class SessionMemory:
             self.ttl = settings.redis_session_ttl_seconds
             self.max_messages = 20
             return
-            
-        self.client = redis_client or redis.from_url(settings.redis_url)
+
+        self.client = redis_client or get_redis_client()
         self.ttl = settings.redis_session_ttl_seconds
         self.max_messages = 20
 
